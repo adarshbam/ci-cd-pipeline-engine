@@ -1,0 +1,20 @@
+{
+  "$schema": "./config.schema.json",
+
+  "webhook": {
+    "url": "/github/ci-cd"
+  },
+
+  "deployment": {
+    "environment": "staging",
+    "runScript": "scripts/deploy.sh"
+  },
+
+  "event": {
+    "push": true
+  },
+  "notifications": {
+    "notifyOnFailure": true,
+    "failureMessage": "Deployment failed!"
+  }
+}
