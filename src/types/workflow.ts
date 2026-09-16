@@ -1,4 +1,4 @@
-export interface Config {
+export interface Workflow {
   deployment: {
     environment: string;
     runScript: string;

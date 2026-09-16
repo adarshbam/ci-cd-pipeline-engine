@@ -1,0 +1,21 @@
+{
+  "$schema": "./project-2.schema.json",
+
+  "webhook": {
+    "url": "/github/rollback"
+  },
+
+  "deployment": {
+    "environment": "staging",
+    "runScript": "scripts/rollback.sh"
+  },
+
+  "event": {
+    "push": true
+  },
+
+  "notifications": {
+    "notifyOnFailure": true,
+    "failureMessage": "Rollback failed!"
+  }
+}
