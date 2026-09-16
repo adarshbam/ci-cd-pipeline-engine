@@ -1,5 +1,5 @@
 {
-  "$schema": "./config.schema.json",
+  "$schema": "./project-1.schema.json",
 
   "webhook": {
     "url": "/github/ci-cd"
