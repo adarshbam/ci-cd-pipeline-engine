@@ -56,7 +56,7 @@ async function runAllWorkflows() {
   const workflows = await readdir(workflowFolderPath, { withFileTypes: true });
 
   console.log(workflows);
-  for (const workflow of workflows) {
+  for (const workflow of workflows) { 
     const isValidJson: Boolean = /^[^.]+\.json$/.test(workflow.name);
     console.log(workflow.name, isValidJson);
     if (workflow.isFile() && isValidJson) {
