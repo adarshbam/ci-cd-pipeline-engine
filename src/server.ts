@@ -7,7 +7,6 @@ import { readdir } from "fs/promises";
 import path from "path";
 import { PORT } from "./config/config.js";
 import { config } from "process";
-import { runGrok } from "./utils/run-ngrok.js";
 
 const app = express();
 
@@ -56,7 +55,7 @@ async function runAllWorkflows() {
   const workflows = await readdir(workflowFolderPath, { withFileTypes: true });
 
   console.log(workflows);
-  for (const workflow of workflows) { 
+  for (const workflow of workflows) {
     const isValidJson: Boolean = /^[^.]+\.json$/.test(workflow.name);
     console.log(workflow.name, isValidJson);
     if (workflow.isFile() && isValidJson) {
@@ -80,7 +79,6 @@ app.listen(PORT, () => {
   console.log(`Run ngrok at ${PORT} using this command`);
 
   console.log(`ngrok http ${String(PORT)}`);
-  runGrok();
 
   runAllWorkflows();
 });
