@@ -7,7 +7,8 @@ export function createWebhookRouter(workflows: Workflow[]) {
 
   for (const workflow of workflows) {
     router.get(`${workflow.webhook.url}`, async (req, res) => {
-      runScript(workflow.deployment.runScript);
+      // runScript(workflow);
+      console.log(workflow)
 
       return res.status(200).json({
         workflow,

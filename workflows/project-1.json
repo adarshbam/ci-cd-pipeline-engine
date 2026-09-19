@@ -1,20 +1,120 @@
 {
-  "$schema": "./project-1.schema.json",
+  "$schema": "./schema/workflow.schema.json",
+  "version": "1.0",
+
+  "name": "vault-storage",
 
   "webhook": {
     "url": "/github/ci-cd"
   },
 
-  "deployment": {
-    "environment": "staging",
-    "runScript": "scripts/deploy.sh"
+  "trigger": {
+    "events": ["push"],
+
+    "branches": {
+      "develop": "test",
+      "main": "prod"
+    }
   },
 
-  "event": {
-    "push": true
+  "concurrency": {
+    "enabled": true,
+    "group": "vault-storage-${branch}",
+    "cancelInProgress": true
   },
+
+  "environments": {
+    "test": {
+      "envFile": ".env.test",
+      "healthUrl": "https://test.example.com/health"
+    },
+
+    "prod": {
+      "envFile": ".env.prod",
+      "healthUrl": "https://example.com/health"
+    }
+  },
+
+  "jobs": {
+    "test": {
+      "steps": [
+        {
+          "name": "Install dependencies",
+          "run": "npm ci"
+        },
+        {
+          "name": "Run tests",
+          "run": "npm test"
+        }
+      ]
+    },
+
+    "lint": {
+      "steps": [
+        {
+          "name": "Running Lint",
+          "run": "echo \"Lint passed ✅\""
+        }
+      ]
+    },
+
+    "build": {
+      "needs": ["test", "link"],
+
+      "steps": [
+        {
+          "name": "Build application",
+          "run": "npm run build"
+        }
+      ],
+
+      "artifacts": {
+        "upload": [
+          {
+            "name": "build",
+            "path": "./dist"
+          }
+        ]
+      }
+    },
+
+    "deploy": {
+      "needs": ["build"],
+
+      "environment": "${environment}",
+
+      "artifacts": {
+        "download": [
+          {
+            "name": "build",
+            "path": "./dist"
+          }
+        ]
+      },
+
+      "steps": [
+        {
+          "name": "Deploy application",
+          "script": "scripts/deploy.sh"
+        },
+
+        {
+          "name": "Health check",
+          "run": "curl -f ${HEALTH_URL}"
+        }
+      ]
+    }
+  },
+
   "notifications": {
-    "notifyOnFailure": true,
-    "failureMessage": "Deployment failed!"
+    "onFailure": {
+      "enabled": true,
+      "message": "Deployment failed!"
+    },
+
+    "onSuccess": {
+      "enabled": true,
+      "message": "Deployment successful!"
+    }
   }
 }

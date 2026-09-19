@@ -1,16 +1,32 @@
 export interface Workflow {
-  deployment: {
-    environment: string;
-    runScript: string;
-  };
+  name: string;
 
   webhook: {
-    enabled: boolean;
     url: string;
   };
 
-  notifications: {
-    notifyOnFailure: boolean;
-    failureMessage: string;
+  trigger: {
+    push?: boolean;
   };
+
+  jobs: Record<string, Job>;
 }
+
+export interface Job {
+  steps: Step[];
+  needs?: string[];
+}
+
+interface BaseStep {
+  name: string;
+}
+
+interface CommandStep extends BaseStep {
+  run: string;
+}
+
+interface ScriptStep extends BaseStep {
+  script: string;
+}
+
+type Step = CommandStep | ScriptStep;

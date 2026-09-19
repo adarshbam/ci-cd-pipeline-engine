@@ -1,21 +1,111 @@
 {
-  "$schema": "./project-2.schema.json",
+  "$schema": "./schema/workflow.schema.json",
+
+  "name": "vault-storage",
+  "version": "1.0",
 
   "webhook": {
     "url": "/github/rollback"
   },
 
-  "deployment": {
-    "environment": "staging",
-    "runScript": "scripts/rollback.sh"
+  "trigger": {
+    "events": ["push"],
+
+    "branches": {
+      "develop": "test",
+      "main": "prod"
+    }
   },
 
-  "event": {
-    "push": true
+  "concurrency": {
+    "enabled": true,
+    "group": "vault-storage-${branch}",
+    "cancelInProgress": true
+  },
+
+  "environments": {
+    "test": {
+      "envFile": ".env.test",
+      "healthUrl": "https://test.example.com/health"
+    },
+
+    "prod": {
+      "envFile": ".env.prod",
+      "healthUrl": "https://example.com/health"
+    }
+  },
+
+  "jobs": {
+    "test": {
+      "steps": [
+        {
+          "name": "Install dependencies",
+          "run": "npm ci"
+        },
+        {
+          "name": "Run tests",
+          "run": "npm test"
+        }
+      ]
+    },
+
+    "build": {
+      "needs": ["test"],
+
+      "steps": [
+        {
+          "name": "Build application",
+          "run": "npm run build"
+        }
+      ],
+
+      "artifacts": {
+        "upload": [
+          {
+            "name": "build",
+            "path": "./dist"
+          }
+        ]
+      }
+    },
+
+    "deploy": {
+      "needs": ["build"],
+
+      "environment": "${environment}",
+
+      "artifacts": {
+        "download": [
+          {
+            "name": "build",
+            "path": "./dist"
+          }
+        ]
+      },
+
+      "steps": [
+        {
+          "name": "Deploy application",
+          "script": "scripts/deploy.sh"
+        },
+
+        {
+          "name": "Health check",
+          "run": "curl -f ${HEALTH_URL}"
+        }
+      ]
+    }
   },
 
   "notifications": {
-    "notifyOnFailure": true,
-    "failureMessage": "Rollback failed!"
+    "onFailure": {
+      "enabled": true,
+      "message": "Deployment failed!"
+    },
+
+    "onSuccess": {
+      "enabled": true,
+      "message": "Deployment successful!"
+    }
   }
 }
