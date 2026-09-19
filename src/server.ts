@@ -1,12 +1,12 @@
 import express from "express";
 import type { Request, Response } from "express";
-import { readWorkflowFile } from "./read-workflow.js";
-import { exec, spawn } from "child_process";
 import "fs/promises";
 import { readdir } from "fs/promises";
 import path from "path";
 import { PORT } from "./config/config.js";
-import { config } from "process";
+import { loadWorkflows } from "./workflow/workflow-loader.js";
+import { createWebhookRouter } from "./routes/webhook.routes.js";
+import type { Workflow } from "./workflow/workflow.js";
 
 const app = express();
 
@@ -16,69 +16,15 @@ app.get("/", (req: Request, res: Response) => {
   });
 });
 
-async function runScript(runScriptPath: string): Promise<String> {
-  return new Promise((resolve, reject) => {
-    const run = spawn("bash", [runScriptPath]);
+const workflows: Workflow[] = await loadWorkflows();
 
-    run.stdout.on("data", (data) => {
-      console.log(data.toString());
-    });
+const webhookRouter = createWebhookRouter(workflows);
 
-    run.stderr.on("data", (data) => {
-      console.error(data.toString());
-    });
-
-    run.on("close", (code) => {
-      if (code === 0) {
-        resolve("Scripted Executed Successfully.");
-      } else {
-        reject(new Error(`Script exited with code ${code}`));
-      }
-    });
-
-    run.on("error", reject);
-  });
-  // await exec(`bash ${config.deployment.runScript}`, (error, stdout, stderr) => {
-  //   if (error) {
-  //     console.error("Deployment failed:", error.message);
-  //     return error.message;
-  //   }
-
-  //   console.log("Deployment output:");
-  //   console.log(stdout);
-  // });
-  // return "Script exectured successfully";
-}
-
-async function runAllWorkflows() {
-  const workflowFolderPath = path.join(process.cwd(), "src", "workflows");
-  const workflows = await readdir(workflowFolderPath, { withFileTypes: true });
-
-  console.log(workflows);
-  for (const workflow of workflows) {
-    const isValidJson: Boolean = /^[^.]+\.json$/.test(workflow.name);
-    console.log(workflow.name, isValidJson);
-    if (workflow.isFile() && isValidJson) {
-      const workflowJSON = await readWorkflowFile(workflow.name);
-      console.log(workflowJSON);
-      console.log(workflowJSON.webhook.url);
-
-      app.get(`${workflowJSON.webhook.url}`, async (req, res) => {
-        runScript(workflowJSON.deployment.runScript);
-
-        return res.status(200).json({
-          workflowJSON,
-        });
-      });
-    }
-  }
-}
+app.use(webhookRouter);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Run ngrok at ${PORT} using this command`);
 
   console.log(`ngrok http ${String(PORT)}`);
-
-  runAllWorkflows();
 });
