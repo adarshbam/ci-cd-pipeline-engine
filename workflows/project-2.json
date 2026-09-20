@@ -1,8 +1,8 @@
 {
   "$schema": "./schema/workflow.schema.json",
+  "version": "1.0",
 
   "name": "vault-storage",
-  "version": "1.0",
 
   "webhook": {
     "url": "/github/rollback"
@@ -49,8 +49,17 @@
       ]
     },
 
+    "lint": {
+      "steps": [
+        {
+          "name": "Running Lint",
+          "run": "echo \"Lint passed ✅\""
+        }
+      ]
+    },
+
     "build": {
-      "needs": ["test"],
+      "needs": ["test", "lint"],
 
       "steps": [
         {

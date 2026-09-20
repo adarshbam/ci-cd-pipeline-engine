@@ -59,7 +59,7 @@
     },
 
     "build": {
-      "needs": ["test", "link"],
+      "needs": ["test", "lint"],
 
       "steps": [
         {

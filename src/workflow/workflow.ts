@@ -6,7 +6,8 @@ export interface Workflow {
   };
 
   trigger: {
-    push?: boolean;
+    events: string[];
+    branches?: Record<string, string>;
   };
 
   jobs: Record<string, Job>;
@@ -30,3 +31,26 @@ interface ScriptStep extends BaseStep {
 }
 
 type Step = CommandStep | ScriptStep;
+
+export type PipelineStatus =
+  | "QUEUED"
+  | "RUNNING"
+  | "SUCCESS"
+  | "FAILED"
+  | "CANCELLED"
+  | "SKIPPED";
+
+export interface PipelineRun {
+  id: string;
+  pipelineId: string;
+  jobs: Record<string, JobRun>;
+  workflow: Workflow;
+  status: PipelineStatus;
+  createdAt: String;
+}
+
+interface JobRun {
+  jobId: string;
+  runnerId?: string;
+  status: PipelineStatus;
+}
