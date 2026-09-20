@@ -1,5 +1,12 @@
-class pipeline {
-  constructor() {}
+import type { Workflow } from "../workflow/workflow.js";
+import RunPipeline from "./pipeline-run.js";
 
-  async run() {}
+class pipeline {
+  constructor(workflow: Workflow) {
+    private workflow = this.workflow;
+  }
+
+  async run() {
+    const PipelineRunner = new RunPipeline(workflow)
+  }
 }
