@@ -1,24 +1,64 @@
 import type {
-  Job,
+  JobRun,
   PipelineRun,
   PipelineStatus,
   Workflow,
 } from "../workflow/workflow.js";
 
+import { randomUUID } from "node:crypto";
+
 export default class RunPipeline implements PipelineRun {
-  private id: string;
-  private pipelineId: string;
-  private jobs: Record<string, Job>;
-  private createdAt: String;
-  private status: PipelineStatus;
-  private workflow: Workflow;
+  id: string;
+  pipelineId: string;
+  jobs: Record<string, JobRun>;
+  createdAt: Date;
+  status: PipelineStatus;
+  workflow: Workflow;
+  startedAt?: Date;
+  finishedAt?: Date;
 
   constructor(workflow: Workflow) {
-    const workflowName: string = workflow.name;
-    this.id = workflowName;
+    this.id = randomUUID();
+    this.pipelineId = workflow.name;
     this.workflow = workflow;
     this.status = "QUEUED";
-    this.createdAt = String(Date.now());
-    this.jobs = workflow.jobs;
+    this.createdAt = new Date();
+    this.jobs = {};
+
+    for (const [jobId, jobConfig] of Object.entries(workflow.jobs)) {
+      this.jobs[jobId] = {
+        jobId,
+        status: "QUEUED",
+      };
+    }
+  }
+
+  start() {
+    if (this.status === "QUEUED") {
+      this.status = "RUNNING";
+      this.startedAt = new Date();
+    } else {
+      throw new Error(
+        "Starting this Pipeline Run because it's not QUEUED",
+      );
+    }
+  }
+
+  complete() {
+    if (this.status === "RUNNING") {
+      this.status = "SUCCESS";
+      this.finishedAt = new Date();
+    } else {
+      throw new Error("Only running pipeline can complete running");
+    }
+  }
+
+  fail() {
+    if (this.status === "RUNNING") {
+      this.status = "FAILED";
+      this.finishedAt = new Date();
+    } else {
+      throw new Error("Only running pipeline can complete running");
+    }
   }
 }

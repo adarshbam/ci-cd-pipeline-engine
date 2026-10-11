@@ -9,8 +9,6 @@ async function readWorkflowFile(fileName: string): Promise<Workflow> {
   const workflowFile = await readFile(workflowPath, "utf-8");
 
   const workflow: Workflow = JSON.parse(workflowFile);
-  console.log(workflow);
-
   return workflow;
 }
 
@@ -20,8 +18,6 @@ export async function loadWorkflows(): Promise<Workflow[]> {
     withFileTypes: true,
   });
 
-  console.log(workflowDirFiles);
-
   let workflows = [];
 
   for (const workflow of workflowDirFiles) {
@@ -30,7 +26,6 @@ export async function loadWorkflows(): Promise<Workflow[]> {
     if (workflow.isFile() && isValidJson) {
       const workflowJSON = await readWorkflowFile(workflow.name);
 
-      console.log(workflowJSON);
       console.log(workflowJSON.webhook.url);
 
       workflows.push(workflowJSON);
