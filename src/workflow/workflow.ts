@@ -46,10 +46,12 @@ export interface PipelineRun {
   jobs: Record<string, JobRun>;
   workflow: Workflow;
   status: PipelineStatus;
-  createdAt: String;
+  createdAt: Date;
+  startedAt?: Date;
+  finishedAt?: Date;
 }
 
-interface JobRun {
+export interface JobRun {
   jobId: string;
   runnerId?: string;
   status: PipelineStatus;
