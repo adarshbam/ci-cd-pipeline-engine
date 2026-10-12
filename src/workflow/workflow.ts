@@ -30,7 +30,7 @@ interface ScriptStep extends BaseStep {
   script: string;
 }
 
-type Step = CommandStep | ScriptStep;
+export type Step = CommandStep | ScriptStep;
 
 export type PipelineStatus =
   | "QUEUED"
