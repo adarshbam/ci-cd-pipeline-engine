@@ -1,3 +1,4 @@
+import { runScheduler } from "../scheduler/pipeline-scheduler.js";
 import type { Workflow } from "../workflow/workflow.js";
 import RunPipeline from "./pipeline-run.js";
 
@@ -14,6 +15,12 @@ class PipelineEngine {
 
     pipelineRun.start();
     this.runs.set(pipelineRun.id, pipelineRun);
+
+    runScheduler(this.workflow, pipelineRun).catch((err) => {
+      console.error("Scheduler failed:", err);
+
+      if (pipelineRun.status === "RUNNING") pipelineRun.fail();
+    });
 
     return pipelineRun;
   }
