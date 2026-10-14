@@ -25,7 +25,7 @@ export default class RunPipeline implements PipelineRun {
     this.createdAt = new Date();
     this.jobs = {};
 
-    for (const [jobId, jobConfig] of Object.entries(workflow.jobs)) {
+    for (const jobId of Object.keys(workflow.jobs)) {
       this.jobs[jobId] = {
         jobId,
         status: "QUEUED",
@@ -38,9 +38,7 @@ export default class RunPipeline implements PipelineRun {
       this.status = "RUNNING";
       this.startedAt = new Date();
     } else {
-      throw new Error(
-        "Starting this Pipeline Run because it's not QUEUED",
-      );
+      throw new Error("Starting this Pipeline Run because it's not QUEUED");
     }
   }
 

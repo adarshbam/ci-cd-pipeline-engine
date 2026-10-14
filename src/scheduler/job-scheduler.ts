@@ -25,10 +25,31 @@ export function skipBlockedJobs(
   run: PipelineRun,
 ): string[] {
   // Your implementation
-  for (const [jobId, jobConfig] of Object.entries(workflow.jobs)) {
-    if (run.jobs[jobId]?.status === "QUEUED") {
+
+  const skippedJobs: string[] = [];
+
+  let change = true;
+  while (change) {
+    change = false;
+    for (const [jobId, jobConfig] of Object.entries(workflow.jobs)) {
+      if (run.jobs[jobId]?.status === "QUEUED") {
         const dependencies = jobConfig.needs ?? [];
-        
+
+        if (
+          dependencies.some(
+            (dependencyId) =>
+              run.jobs[dependencyId]?.status === "CANCELLED" ||
+              run.jobs[dependencyId]?.status === "FAILED" ||
+              run.jobs[dependencyId]?.status === "SKIPPED",
+          )
+        ) {
+          run.jobs[jobId].status = "SKIPPED";
+          skippedJobs.push(jobId);
+          change = true;
+        }
+      }
     }
   }
+
+  return skippedJobs;
 }

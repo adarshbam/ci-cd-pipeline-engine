@@ -9,12 +9,12 @@ export function createWebhookRouter(workflows: Workflow[]) {
     const engine = new PipelineEngine(workflow);
 
     router.get(`${workflow.webhook.url}`, async (req, res) => {
-      try { 
+      try {
         const pipelineRun = await engine.run();
 
         return res.status(202).json({
           runId: pipelineRun.id,
-          piplelineId: pipelineRun.pipelineId,
+          pipelineId: pipelineRun.pipelineId,
           status: pipelineRun.status,
         });
       } catch (error) {
@@ -23,6 +23,19 @@ export function createWebhookRouter(workflows: Workflow[]) {
           error: "Failed to create pipeline run",
         });
       }
+    });
+
+    router.get(`${workflow.webhook.url}/runs/:runId`, async (req, res) => {
+      let { runId } = req.params;
+
+      const run = engine.getRun(runId);
+      if (!run) return res.status(404).json({ error: "Run not found" });
+      return res.status(200).json({
+        runId: run.id,
+        pipelineId: run.pipelineId,
+        status: run.status,
+        jobs: run.jobs,
+      });
     });
   }
 
