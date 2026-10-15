@@ -1,5 +1,6 @@
+import { resolveEnvironment } from "../environments/environment-resolver.js";
 import { runScheduler } from "../scheduler/pipeline-scheduler.js";
-import type { Workflow } from "../workflow/workflow.js";
+import type { Environment, Workflow } from "../workflow/workflow.js";
 import RunPipeline from "./pipeline-run.js";
 
 class PipelineEngine {
@@ -10,8 +11,17 @@ class PipelineEngine {
     this.workflow = workflow;
   }
 
-  async run(): Promise<RunPipeline> {
-    const pipelineRun = new RunPipeline(this.workflow);
+  async run(branch?: string): Promise<RunPipeline> {
+    let resolvedEnvironment: Environment | undefined;
+
+    if (branch !== undefined) {
+      resolvedEnvironment = resolveEnvironment(branch);
+    }
+    const pipelineRun = new RunPipeline(
+      this.workflow,
+      branch,
+      resolvedEnvironment,
+    );
 
     pipelineRun.start();
     this.runs.set(pipelineRun.id, pipelineRun);

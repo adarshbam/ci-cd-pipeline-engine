@@ -3,9 +3,16 @@ import type { StepExecutionResult } from "../types/step-result.js";
 
 import { withWorkspace } from "./workspace.js";
 import { runSteps } from "../steps/steps-runner.js";
-export async function executeStepsInWorkspace(
+
+export async function executeStepsInWorkspace(steps: Step[]) {
+  return withWorkspace(async (workspacePath) => {
+    return executeStepsInExistingWorkspace(steps, workspacePath);
+  });
+}
+
+export async function executeStepsInExistingWorkspace(
   steps: Step[],
-): Promise<StepExecutionResult[]> {
-  // Combine withWorkspace() and runSteps().
-  return await withWorkspace((workspacePath) => runSteps(steps, workspacePath));
+  workspacePath: string,
+) {
+  return runSteps(steps, workspacePath);
 }

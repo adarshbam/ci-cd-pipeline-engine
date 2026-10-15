@@ -1,4 +1,5 @@
 import type {
+  Environment,
   JobRun,
   PipelineRun,
   PipelineStatus,
@@ -16,8 +17,10 @@ export default class RunPipeline implements PipelineRun {
   workflow: Workflow;
   startedAt?: Date;
   finishedAt?: Date;
+  branch?: string;
+  environment?: Environment;
 
-  constructor(workflow: Workflow) {
+  constructor(workflow: Workflow, branch?: string, environment?: Environment) {
     this.id = randomUUID();
     this.pipelineId = workflow.name;
     this.workflow = workflow;
@@ -25,6 +28,13 @@ export default class RunPipeline implements PipelineRun {
     this.createdAt = new Date();
     this.jobs = {};
 
+    if (branch !== undefined) {
+      this.branch = branch;
+    }
+
+    if (environment !== undefined) {
+      this.environment = environment;
+    }
     for (const jobId of Object.keys(workflow.jobs)) {
       this.jobs[jobId] = {
         jobId,

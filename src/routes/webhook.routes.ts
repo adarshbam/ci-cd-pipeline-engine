@@ -1,6 +1,7 @@
 import { Router } from "express";
 import type { Workflow } from "../workflow/workflow.js";
 import PipelineEngine from "../pipeline/pipeline-engine.js";
+import { resolveEnvironment } from "../environments/environment-resolver.js";
 
 export function createWebhookRouter(workflows: Workflow[]) {
   const router = Router();
@@ -10,7 +11,25 @@ export function createWebhookRouter(workflows: Workflow[]) {
 
     router.get(`${workflow.webhook.url}`, async (req, res) => {
       try {
-        const pipelineRun = await engine.run();
+        const branch = req.query.branch;
+
+        if (branch !== undefined && typeof branch !== "string") {
+          return res.status(400).json({
+            error: "Invalid branch type",
+          });
+        }
+
+        if (branch !== undefined) {
+          try {
+            resolveEnvironment(branch);
+          } catch (error) {
+            return res.status(400).json({
+              error: error instanceof Error ? error.message : "Invalid branch",
+            });
+          }
+        }
+
+        const pipelineRun = await engine.run(branch);
 
         return res.status(202).json({
           runId: pipelineRun.id,

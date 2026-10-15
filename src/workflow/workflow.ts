@@ -13,9 +13,24 @@ export interface Workflow {
   jobs: Record<string, Job>;
 }
 
+export interface ArtifactUpload {
+  name: string;
+  path: string;
+}
+
+export interface ArtifactDownload {
+  fromJob: string;
+  name: string;
+  path: string;
+}
+
 export interface Job {
   steps: Step[];
   needs?: string[];
+  artifacts?: {
+    upload?: ArtifactUpload[];
+    download?: ArtifactDownload[];
+  };
 }
 
 interface BaseStep {
@@ -40,6 +55,8 @@ export type PipelineStatus =
   | "CANCELLED"
   | "SKIPPED";
 
+export type Environment = "TEST" | "PROD";
+
 export interface PipelineRun {
   id: string;
   pipelineId: string;
@@ -49,10 +66,14 @@ export interface PipelineRun {
   createdAt: Date;
   startedAt?: Date;
   finishedAt?: Date;
+  branch?: string;
+  environment?: Environment;
 }
 
 export interface JobRun {
   jobId: string;
   runnerId?: string;
   status: PipelineStatus;
+  branch?: string;
+  environment?: Environment;
 }
