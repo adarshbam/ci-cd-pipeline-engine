@@ -32,9 +32,23 @@ export async function runScheduler(
     if (readyJobs.length > 0)
       for (const readyJob of readyJobs) {
         const job = run.jobs?.[readyJob];
+        const jobId = job?.jobId;
+
         if (!job) continue;
 
-        await executeJob(workflow, run, job.jobId);
+        if (!jobId) continue;
+
+        try {
+          await executeJob(workflow, run, jobId);
+        } catch (error) {
+          // executeJob already marks execution failures as FAILED.
+          if (run.jobs[jobId]?.status !== "FAILED") {
+            throw error;
+          }
+
+          // Expected job failure.
+          // Let the scheduler continue processing job statuses.
+        }
       }
     else if (skippedJobs.length === 0) {
       throw new Error("Cycle Detected!");
