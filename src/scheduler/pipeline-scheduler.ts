@@ -5,7 +5,7 @@ import { getReadyJobs, skipBlockedJobs } from "./job-scheduler.js";
 import { ConcurrencyLimiter } from "./concurrency-limiter.js";
 import { JobQueue } from "./job-queue.js";
 import { enqueueReadyJobsOnce } from "./job-dispatch.js";
-import { executeQueuedJobs } from "./queued-job-executor.js";
+import { executeQueuedJobsSettled } from "./settled-job-executor.js";
 
 export async function runScheduler(
   workflow: Workflow,
@@ -41,7 +41,7 @@ export async function runScheduler(
     }
 
     if (readyJobs.length > 0) {
-      await executeQueuedJobs(queue, limiter, async (jobId) => {
+      await executeQueuedJobsSettled(queue, limiter, async (jobId) => {
         try {
           await executeJob(workflow, run, jobId);
         } catch (error) {
