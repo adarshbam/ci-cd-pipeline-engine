@@ -35,6 +35,8 @@ export interface Job {
 
 interface BaseStep {
   name: string;
+  timeoutMs?: number;
+  retries?: number;
 }
 
 interface CommandStep extends BaseStep {

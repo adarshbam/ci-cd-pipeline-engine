@@ -4,6 +4,7 @@ import { runProcess } from "./process-runner.js";
 export async function runScript(
   runScriptPath: string,
   cwd?: string,
+  timeoutMs?: number,
 ): Promise<StepExecutionResult> {
-  return runProcess([runScriptPath], cwd);
+  return runProcess([runScriptPath], cwd, timeoutMs);
 }
