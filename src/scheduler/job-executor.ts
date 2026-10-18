@@ -3,6 +3,8 @@ import {
   saveArtifact,
 } from "../artifacts/artifact-manager.js";
 import { resolveWorkspaceArtifactPath } from "../artifacts/artifact-path.js";
+import { checkEnvironmentHealth } from "../health/environment-health.js";
+import { executeRollbackSteps } from "../rollback/rollback-steps.js";
 import { executeStepsInExistingWorkspace } from "../runner/job-runner.js";
 import { withWorkspace } from "../runner/workspace.js";
 import type { Workflow, PipelineRun } from "../workflow/workflow.js";
@@ -89,15 +91,49 @@ export async function executeJob(
       return stepsExecutionResult;
     });
 
-    if (
-      stepsExecutionResult.some((stepResult) => stepResult.status === "FAILED")
-    ) {
+    const failedStep = stepsExecutionResult.find(
+      (stepResult) => stepResult.status === "FAILED",
+    );
+
+    if (failedStep) {
       jobRun.status = "FAILED";
+
+      jobRun.failureReason =
+        failedStep.stderr?.trim() ||
+        `Step failed with exit code ${failedStep.exitCode ?? "unknown"}`;
     } else {
+      if (jobConfig.healthCheck === true) {
+        if (!run.environment) {
+          throw new Error("Environment is required for health checks");
+        }
+        const healthCheckResult = await checkEnvironmentHealth(
+          run.environment,
+          workflow.environments ?? {},
+        );
+        if (!healthCheckResult.healthy) {
+          const failureReason = `Deployment health check failed: ${
+            healthCheckResult.error ??
+            `HTTP ${healthCheckResult.statusCode ?? "unknown"}`
+          }`;
+
+          jobRun.failureReason = failureReason;
+
+          if (jobConfig.rollback) {
+            jobRun.rollbackResult = await executeRollbackSteps(
+              jobConfig.rollback,
+            );
+          }
+
+          throw new Error(failureReason);
+        }
+      }
       jobRun.status = "SUCCESS";
     }
   } catch (err) {
     jobRun.status = "FAILED";
+
+    jobRun.failureReason ??= err instanceof Error ? err.message : String(err);
+
     throw err;
   }
 }

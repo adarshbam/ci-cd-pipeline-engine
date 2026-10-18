@@ -1,5 +1,12 @@
+import type { RollbackResult } from "../rollback/rollback-executor.js";
+
 export interface Workflow {
   name: string;
+
+  environments?: {
+    test?: EnvironmentConfig;
+    prod?: EnvironmentConfig;
+  };
 
   webhook: {
     url: string;
@@ -31,6 +38,8 @@ export interface Job {
     upload?: ArtifactUpload[];
     download?: ArtifactDownload[];
   };
+  healthCheck?: boolean;
+  rollback?: RollbackConfig;
 }
 
 interface BaseStep {
@@ -59,6 +68,11 @@ export type PipelineStatus =
 
 export type Environment = "TEST" | "PROD";
 
+export interface EnvironmentConfig {
+  envFile?: string;
+  healthUrl?: string;
+}
+
 export interface PipelineRun {
   id: string;
   pipelineId: string;
@@ -78,4 +92,10 @@ export interface JobRun {
   status: PipelineStatus;
   branch?: string;
   environment?: Environment;
+  failureReason?: string;
+  rollbackResult?: RollbackResult;
+}
+
+export interface RollbackConfig {
+  steps: Step[];
 }
