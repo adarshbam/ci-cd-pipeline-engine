@@ -175,7 +175,10 @@ export function createWebhookRouter(workflows: Workflow[]) {
     });
 
     router.get(`${workflow.webhook.url}/metrics`, async (req, res) => {
-      
+      return res.json({
+        ...engine.getMetricsSnapshot(),
+        activeRuns: engine.getActiveRunCount(),
+      });
     });
   }
 
