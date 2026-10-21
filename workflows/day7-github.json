@@ -1,0 +1,31 @@
+{
+  "$schema": "./schema/workflow.schema.json",
+  "name": "day7-github",
+  "version": "1.0",
+  "webhook": {
+    "url": "/webhooks/day7-github",
+    "methods": ["POST"]
+  },
+  "trigger": {
+    "events": ["push"]
+  },
+  "jobs": {
+    "build": {
+      "steps": [
+        {
+          "name": "GitHub Build",
+          "run": "echo 'Building GitHub project'"
+        }
+      ]
+    },
+    "test": {
+      "needs": ["build"],
+      "steps": [
+        {
+          "name": "GitHub Tests",
+          "run": "echo 'All GitHub workflow tests passed'"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,69 @@
+{
+  "$schema": "./schema/workflow.schema.json",
+  "name": "day7-capstone",
+  "version": "1.0",
+  "webhook": {
+    "url": "/webhooks/day7-capstone"
+  },
+  "trigger": {
+    "events": ["push"]
+  },
+  "jobs": {
+    "build": {
+      "steps": [
+        {
+          "name": "Build Release",
+          "run": "mkdir -p dist && echo 'Release ready' > dist/release.txt"
+        }
+      ],
+      "artifacts": {
+        "upload": [
+          {
+            "name": "release-bundle",
+            "path": "dist/release.txt"
+          }
+        ]
+      }
+    },
+    "unit-test": {
+      "needs": ["build"],
+      "steps": [
+        {
+          "name": "Run Unit Tests",
+          "run": "node -e \"setTimeout(() => console.log('Unit tests passed'), 1200)\""
+        }
+      ]
+    },
+    "integration-test": {
+      "needs": ["build"],
+      "steps": [
+        {
+          "name": "Run Integration Tests",
+          "run": "node -e \"setTimeout(() => console.log('Integration tests passed'), 1200)\""
+        }
+      ]
+    },
+    "deploy": {
+      "needs": ["build", "unit-test", "integration-test"],
+      "artifacts": {
+        "download": [
+          {
+            "name": "release-bundle",
+            "fromJob": "build",
+            "path": "dist/release.txt"
+          }
+        ]
+      },
+      "steps": [
+        {
+          "name": "Verify Release Artifact",
+          "run": "grep -Fxq 'Release ready' dist/release.txt"
+        },
+        {
+          "name": "Deploy Release",
+          "run": "cat dist/release.txt && echo 'Deployment successful!'"
+        }
+      ]
+    }
+  }
+}

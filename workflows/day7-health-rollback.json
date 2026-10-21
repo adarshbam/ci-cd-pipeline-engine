@@ -1,0 +1,87 @@
+{
+  "$schema": "./schema/workflow.schema.json",
+  "name": "day7-health-rollback",
+  "version": "1.0",
+  "webhook": {
+    "url": "/webhooks/day7-health-rollback"
+  },
+  "trigger": {
+    "events": ["push"]
+  },
+  "jobs": {
+    "build": {
+      "steps": [
+        {
+          "name": "Build Release",
+          "run": "mkdir -p dist && echo 'Release ready' > dist/release.txt"
+        }
+      ],
+      "artifacts": {
+        "upload": [
+          {
+            "name": "release-bundle",
+            "path": "dist/release.txt"
+          }
+        ]
+      }
+    },
+    "unit-test": {
+      "needs": ["build"],
+      "steps": [
+        {
+          "name": "Run Unit Tests",
+          "run": "echo 'Unit tests passed!'"
+        }
+      ]
+    },
+    "integration-test": {
+      "needs": ["build"],
+      "steps": [
+        {
+          "name": "Run Integration Tests",
+          "run": "echo 'Integration tests passed!'"
+        }
+      ]
+    },
+    "deploy": {
+      "needs": ["build", "unit-test", "integration-test"],
+      "healthCheck": true,
+      "artifacts": {
+        "download": [
+          {
+            "name": "release-bundle",
+            "fromJob": "build",
+            "path": "dist/release.txt"
+          }
+        ]
+      },
+      "steps": [
+        {
+          "name": "Verify Release",
+          "run": "grep -Fxq 'Release ready' dist/release.txt"
+        },
+        {
+          "name": "Deploy Release",
+          "run": "echo 'Deployment completed'"
+        }
+      ],
+      "rollback": {
+        "steps": [
+          {
+            "name": "Restore Previous Release",
+            "run": "echo 'Previous release restored'"
+          }
+        ]
+      }
+    },
+    "afterDeploy": {
+      "needs": ["deploy"],
+      "steps": [
+        {
+          "name": "Post-Deployment Task",
+          "run": "echo 'Post-deployment completed'"
+        }
+      ]
+    }
+  }
+}
