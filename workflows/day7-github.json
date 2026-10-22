@@ -7,7 +7,9 @@
     "methods": ["POST"]
   },
   "trigger": {
-    "events": ["push"]
+    "events": ["push"],
+    "allowedBranches": ["main"],
+    "allowedRepositories": ["example/day7-project"]
   },
   "jobs": {
     "build": {
@@ -23,7 +25,7 @@
       "steps": [
         {
           "name": "GitHub Tests",
-          "run": "echo 'All GitHub workflow tests passed'"
+          "run": "echo 'All GitHub tests passed'"
         }
       ]
     }

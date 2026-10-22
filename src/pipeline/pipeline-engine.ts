@@ -12,6 +12,7 @@ import RunPipeline from "./pipeline-run.js";
 class PipelineEngine {
   private workflow: Workflow;
   private runs = new Map<string, RunPipeline>();
+  private completionPromises = new Map<string, Promise<void>>();
   private metrics = new MetricsCollector();
 
   constructor(workflow: Workflow) {
@@ -41,7 +42,7 @@ class PipelineEngine {
     this.metrics.startRun(pipelineRun.id);
     this.runs.set(pipelineRun.id, pipelineRun);
 
-    runScheduler(this.workflow, pipelineRun)
+    const completionPromise = runScheduler(this.workflow, pipelineRun)
       .then(async () => {
         const succeeded = pipelineRun.status === "SUCCESS";
 
@@ -86,6 +87,8 @@ class PipelineEngine {
         console.error("Pipeline finalization failed:", err);
       });
 
+    this.completionPromises.set(pipelineRun.id, completionPromise);
+
     return pipelineRun;
   }
 
@@ -100,6 +103,14 @@ class PipelineEngine {
 
   getActiveRunCount(): number {
     return this.metrics.getActiveRunCount();
+  }
+
+  async waitForCompletion(runId: string): Promise<RunPipeline> {
+    const run = this.runs.get(runId);
+    const completedPromise = this.completionPromises.get(runId);
+    if (!run || !completedPromise) throw new Error("Run not found");
+    await completedPromise;
+    return run;
   }
 }
 

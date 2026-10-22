@@ -5,29 +5,18 @@
   "description": "Production-grade, generalized workflow configuration schema for the custom CI/CD Pipeline Engine. This schema is shared by every workflow and is not tied to a specific project.",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "$schema",
-    "version",
-    "name",
-    "trigger",
-    "jobs"
-  ],
+  "required": ["$schema", "version", "name", "trigger", "jobs"],
   "properties": {
     "$schema": {
       "type": "string",
       "description": "Schema URI or relative path used by the workflow configuration.",
-      "examples": [
-        "./Workflow.schema.json"
-      ]
+      "examples": ["./Workflow.schema.json"]
     },
     "version": {
       "type": "string",
       "description": "Workflow configuration schema version understood by the pipeline engine.",
       "pattern": "^[0-9]+\\.[0-9]+(?:\\.[0-9]+)?$",
-      "examples": [
-        "1.0",
-        "1.1"
-      ]
+      "examples": ["1.0", "1.1"]
     },
     "name": {
       "type": "string",
@@ -75,13 +64,7 @@
             "type": "string",
             "minLength": 1
           },
-          "examples": [
-            [
-              "linux",
-              "x64",
-              "node-24"
-            ]
-          ]
+          "examples": [["linux", "x64", "node-24"]]
         },
         "pool": {
           "type": "string",
@@ -89,11 +72,7 @@
         },
         "mode": {
           "type": "string",
-          "enum": [
-            "shared",
-            "dedicated",
-            "ephemeral"
-          ]
+          "enum": ["shared", "dedicated", "ephemeral"]
         },
         "maxQueueTime": {
           "$ref": "#/$defs/duration"
@@ -144,11 +123,7 @@
     "duration": {
       "type": "string",
       "pattern": "^(?:[0-9]+(?:\\.[0-9]+)?)(?:ms|s|m|h|d)$",
-      "examples": [
-        "30s",
-        "10m",
-        "1h"
-      ]
+      "examples": ["30s", "10m", "1h"]
     },
     "cron": {
       "type": "string",
@@ -184,20 +159,11 @@
       "additionalProperties": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "provider",
-          "name"
-        ],
+        "required": ["provider", "name"],
         "properties": {
           "provider": {
             "type": "string",
-            "enum": [
-              "engine",
-              "env",
-              "vault",
-              "secret-manager",
-              "external"
-            ]
+            "enum": ["engine", "env", "vault", "secret-manager", "external"]
           },
           "name": {
             "type": "string",
@@ -213,9 +179,7 @@
     "webhook": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "url"
-      ],
+      "required": ["url"],
       "properties": {
         "url": {
           "type": "string",
@@ -229,14 +193,9 @@
           "uniqueItems": true,
           "items": {
             "type": "string",
-            "enum": [
-              "GET",
-              "POST"
-            ]
+            "enum": ["GET", "POST"]
           },
-          "default": [
-            "POST"
-          ]
+          "default": ["POST"]
         },
         "secretRef": {
           "$ref": "#/$defs/identifier"
@@ -247,10 +206,7 @@
           "properties": {
             "algorithm": {
               "type": "string",
-              "enum": [
-                "HMAC-SHA256",
-                "HMAC-SHA512"
-              ]
+              "enum": ["HMAC-SHA256", "HMAC-SHA512"]
             },
             "header": {
               "$ref": "#/$defs/nonEmptyString"
@@ -266,9 +222,7 @@
     "trigger": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "events"
-      ],
+      "required": ["events"],
       "properties": {
         "events": {
           "type": "array",
@@ -301,6 +255,28 @@
             }
           ]
         },
+
+        "allowedBranches": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1,
+          "uniqueItems": true,
+          "description": "Branches allowed to trigger this workflow."
+        },
+
+        "allowedRepositories": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+
         "tags": {
           "type": "array",
           "uniqueItems": true,
@@ -347,9 +323,7 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": [
-              "cron"
-            ],
+            "required": ["cron"],
             "properties": {
               "cron": {
                 "$ref": "#/$defs/cron"
@@ -385,9 +359,7 @@
             }
           },
           "then": {
-            "required": [
-              "schedule"
-            ]
+            "required": ["schedule"]
           }
         },
         {
@@ -401,9 +373,7 @@
             }
           },
           "then": {
-            "required": [
-              "pullRequest"
-            ]
+            "required": ["pullRequest"]
           }
         }
       ]
@@ -431,10 +401,7 @@
     "concurrency": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "enabled",
-        "group"
-      ],
+      "required": ["enabled", "group"],
       "properties": {
         "enabled": {
           "type": "boolean"
@@ -463,13 +430,7 @@
       "properties": {
         "shell": {
           "type": "string",
-          "enum": [
-            "bash",
-            "sh",
-            "pwsh",
-            "powershell",
-            "cmd"
-          ]
+          "enum": ["bash", "sh", "pwsh", "powershell", "cmd"]
         },
         "workingDirectory": {
           "type": "string",
@@ -550,19 +511,11 @@
         },
         "compression": {
           "type": "string",
-          "enum": [
-            "none",
-            "gzip",
-            "zip",
-            "tar-gz"
-          ]
+          "enum": ["none", "gzip", "zip", "tar-gz"]
         },
         "storage": {
           "type": "string",
-          "enum": [
-            "local",
-            "object-storage"
-          ]
+          "enum": ["local", "object-storage"]
         },
         "failOnMissing": {
           "type": "boolean",
@@ -580,11 +533,7 @@
         },
         "provider": {
           "type": "string",
-          "enum": [
-            "local",
-            "redis",
-            "object-storage"
-          ]
+          "enum": ["local", "redis", "object-storage"]
         },
         "keyPrefix": {
           "$ref": "#/$defs/nonEmptyString"
@@ -673,9 +622,7 @@
     "job": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "steps"
-      ],
+      "required": ["steps"],
       "properties": {
         "name": {
           "$ref": "#/$defs/nonEmptyString"
@@ -760,28 +707,15 @@
         },
         "mode": {
           "type": "string",
-          "enum": [
-            "shared",
-            "dedicated",
-            "ephemeral"
-          ]
+          "enum": ["shared", "dedicated", "ephemeral"]
         },
         "workspace": {
           "type": "string",
-          "enum": [
-            "clean",
-            "persistent"
-          ]
+          "enum": ["clean", "persistent"]
         },
         "shell": {
           "type": "string",
-          "enum": [
-            "bash",
-            "sh",
-            "pwsh",
-            "powershell",
-            "cmd"
-          ]
+          "enum": ["bash", "sh", "pwsh", "powershell", "cmd"]
         },
         "resources": {
           "type": "object",
@@ -847,10 +781,7 @@
     "service": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "name",
-        "image"
-      ],
+      "required": ["name", "image"],
       "properties": {
         "name": {
           "$ref": "#/$defs/identifier"
@@ -881,9 +812,7 @@
     "step": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "name"
-      ],
+      "required": ["name"],
       "properties": {
         "name": {
           "$ref": "#/$defs/nonEmptyString"
@@ -921,13 +850,7 @@
         },
         "shell": {
           "type": "string",
-          "enum": [
-            "bash",
-            "sh",
-            "pwsh",
-            "powershell",
-            "cmd"
-          ]
+          "enum": ["bash", "sh", "pwsh", "powershell", "cmd"]
         },
         "timeout": {
           "$ref": "#/$defs/duration"
@@ -960,58 +883,40 @@
       },
       "oneOf": [
         {
-          "required": [
-            "run"
-          ],
+          "required": ["run"],
           "not": {
             "anyOf": [
               {
-                "required": [
-                  "script"
-                ]
+                "required": ["script"]
               },
               {
-                "required": [
-                  "uses"
-                ]
+                "required": ["uses"]
               }
             ]
           }
         },
         {
-          "required": [
-            "script"
-          ],
+          "required": ["script"],
           "not": {
             "anyOf": [
               {
-                "required": [
-                  "run"
-                ]
+                "required": ["run"]
               },
               {
-                "required": [
-                  "uses"
-                ]
+                "required": ["uses"]
               }
             ]
           }
         },
         {
-          "required": [
-            "uses"
-          ],
+          "required": ["uses"],
           "not": {
             "anyOf": [
               {
-                "required": [
-                  "run"
-                ]
+                "required": ["run"]
               },
               {
-                "required": [
-                  "script"
-                ]
+                "required": ["script"]
               }
             ]
           }
@@ -1029,10 +934,7 @@
         },
         "backoff": {
           "type": "string",
-          "enum": [
-            "fixed",
-            "exponential"
-          ]
+          "enum": ["fixed", "exponential"]
         },
         "delay": {
           "$ref": "#/$defs/duration"
@@ -1074,23 +976,15 @@
       },
       "oneOf": [
         {
-          "required": [
-            "url"
-          ],
+          "required": ["url"],
           "not": {
-            "required": [
-              "command"
-            ]
+            "required": ["command"]
           }
         },
         {
-          "required": [
-            "command"
-          ],
+          "required": ["command"],
           "not": {
-            "required": [
-              "url"
-            ]
+            "required": ["url"]
           }
         }
       ]
@@ -1098,11 +992,7 @@
     "outputMap": {
       "type": "object",
       "additionalProperties": {
-        "type": [
-          "string",
-          "number",
-          "boolean"
-        ]
+        "type": ["string", "number", "boolean"]
       }
     },
     "jobArtifacts": {
@@ -1141,10 +1031,7 @@
     "artifact": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "name",
-        "path"
-      ],
+      "required": ["name", "path"],
       "properties": {
         "name": {
           "$ref": "#/$defs/identifier"
@@ -1167,22 +1054,14 @@
         },
         "compression": {
           "type": "string",
-          "enum": [
-            "none",
-            "gzip",
-            "zip",
-            "tar-gz"
-          ]
+          "enum": ["none", "gzip", "zip", "tar-gz"]
         }
       }
     },
     "artifactReference": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "name",
-        "path"
-      ],
+      "required": ["name", "path"],
       "properties": {
         "name": {
           "$ref": "#/$defs/identifier"
@@ -1233,10 +1112,7 @@
     "cacheEntry": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "key",
-        "paths"
-      ],
+      "required": ["key", "paths"],
       "properties": {
         "key": {
           "$ref": "#/$defs/expression"
@@ -1283,9 +1159,7 @@
     "notificationRule": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "enabled"
-      ],
+      "required": ["enabled"],
       "properties": {
         "enabled": {
           "type": "boolean"
@@ -1299,12 +1173,7 @@
           "uniqueItems": true,
           "items": {
             "type": "string",
-            "enum": [
-              "console",
-              "webhook",
-              "email",
-              "slack"
-            ]
+            "enum": ["console", "webhook", "email", "slack"]
           }
         },
         "webhookUrl": {
@@ -1317,9 +1186,7 @@
       "type": "object",
       "description": "Rollback steps executed after a deployment health check fails.",
       "additionalProperties": false,
-      "required": [
-        "steps"
-      ],
+      "required": ["steps"],
       "properties": {
         "steps": {
           "type": "array",
@@ -1331,9 +1198,7 @@
               },
               {
                 "not": {
-                  "required": [
-                    "uses"
-                  ]
+                  "required": ["uses"]
                 }
               }
             ]

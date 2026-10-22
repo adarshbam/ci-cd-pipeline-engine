@@ -1,0 +1,81 @@
+{
+  "$schema": "./schema/workflow.schema.json",
+  "name": "day7-failure-drills",
+  "version": "1.0",
+  "webhook": {
+    "url": "/webhooks/day7-failure-drills",
+    "methods": ["POST"]
+  },
+  "trigger": {
+    "events": ["push"],
+    "allowedBranches": ["main"],
+    "allowedRepositories": ["example/failure-drills"]
+  },
+  "jobs": {
+    "build": {
+      "steps": [
+        {
+          "name": "Build Release",
+          "run": "mkdir -p dist && echo 'Release ready' > dist/release.txt"
+        }
+      ],
+      "artifacts": {
+        "upload": [
+          {
+            "name": "release-bundle",
+            "path": "dist/release.txt"
+          }
+        ]
+      }
+    },
+    "unit-test": {
+      "needs": ["build"],
+      "steps": [
+        {
+          "name": "Unit Tests",
+          "run": "echo 'Unit tests passed'"
+        }
+      ]
+    },
+    "integration-test": {
+      "needs": ["build"],
+      "steps": [
+        {
+          "name": "Integration Tests",
+          "run": "echo 'Integration tests passed'"
+        }
+      ]
+    },
+    "deploy": {
+      "needs": ["build", "unit-test", "integration-test"],
+      "artifacts": {
+        "download": [
+          {
+            "name": "release-bundle",
+            "fromJob": "build",
+            "path": "dist/release.txt"
+          }
+        ]
+      },
+      "steps": [
+        {
+          "name": "Verify Artifact",
+          "run": "grep -Fxq 'Release ready' dist/release.txt"
+        },
+        {
+          "name": "Deploy",
+          "run": "echo 'Deployment successful'"
+        }
+      ]
+    },
+    "after-deploy": {
+      "needs": ["deploy"],
+      "steps": [
+        {
+          "name": "Post Deployment",
+          "run": "echo 'Post deployment completed'"
+        }
+      ]
+    }
+  }
+}

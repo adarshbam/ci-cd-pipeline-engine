@@ -1,0 +1,31 @@
+{
+  "$schema": "./schema/workflow.schema.json",
+  "name": "day7-run-tracking",
+  "version": "1.0",
+  "webhook": {
+    "url": "/webhooks/day7-run-tracking",
+    "methods": ["GET"]
+  },
+  "trigger": {
+    "events": ["push"]
+  },
+  "jobs": {
+    "build": {
+      "steps": [
+        {
+          "name": "Slow Build",
+          "run": "sleep 0.5; echo 'Build completed'"
+        }
+      ]
+    },
+    "test": {
+      "needs": ["build"],
+      "steps": [
+        {
+          "name": "Test Build",
+          "run": "echo 'Tests passed'"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "$schema": "./schema/workflow.schema.json",
+  "name": "day7-dedup-hardening",
+  "version": "1.0",
+  "webhook": {
+    "url": "/webhooks/day7-dedup-hardening",
+    "methods": ["POST"]
+  },
+  "trigger": {
+    "events": ["push"],
+    "allowedBranches": ["main"],
+    "allowedRepositories": ["example/day7-project"]
+  },
+  "jobs": {
+    "build": {
+      "steps": [
+        {
+          "name": "Build",
+          "run": "sleep 0.3; echo 'Build complete'"
+        }
+      ]
+    },
+    "test": {
+      "needs": ["build"],
+      "steps": [
+        {
+          "name": "Run Tests",
+          "run": "echo 'Tests passed'"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,72 @@
+{
+  "$schema": "./schema/workflow.schema.json",
+  "name": "day7-release-smoke",
+  "version": "1.0",
+  "webhook": {
+    "url": "/webhooks/day7-release-smoke",
+    "methods": ["POST"]
+  },
+  "trigger": {
+    "events": ["push"],
+    "allowedBranches": ["main"],
+    "allowedRepositories": ["example/day7-project"]
+  },
+  "jobs": {
+    "build": {
+      "steps": [
+        {
+          "name": "Create Release",
+          "run": "sleep 0.5; mkdir -p dist && echo 'Release ready' > dist/release.txt"
+        }
+      ],
+      "artifacts": {
+        "upload": [
+          {
+            "name": "release-bundle",
+            "path": "dist/release.txt"
+          }
+        ]
+      }
+    },
+    "unit-test": {
+      "needs": ["build"],
+      "steps": [
+        {
+          "name": "Run Unit Tests",
+          "run": "echo 'Unit tests passed'"
+        }
+      ]
+    },
+    "integration-test": {
+      "needs": ["build"],
+      "steps": [
+        {
+          "name": "Run Integration Tests",
+          "run": "echo 'Integration tests passed'"
+        }
+      ]
+    },
+    "deploy": {
+      "needs": ["build", "unit-test", "integration-test"],
+      "artifacts": {
+        "download": [
+          {
+            "name": "release-bundle",
+            "fromJob": "build",
+            "path": "dist/release.txt"
+          }
+        ]
+      },
+      "steps": [
+        {
+          "name": "Verify Release Artifact",
+          "run": "grep -Fxq 'Release ready' dist/release.txt"
+        },
+        {
+          "name": "Deploy Release",
+          "run": "echo 'Release deployment successful'"
+        }
+      ]
+    }
+  }
+}

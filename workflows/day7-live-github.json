@@ -1,0 +1,72 @@
+{
+  "$schema": "./schema/workflow.schema.json",
+  "name": "day7-live-github",
+  "version": "1.0",
+  "webhook": {
+    "url": "/webhooks/day7-live-github",
+    "methods": ["POST"]
+  },
+  "trigger": {
+    "events": ["push"],
+    "allowedBranches": ["main"],
+    "allowedRepositories": ["adarshbam/ci-cd-pipeline-engine"]
+  },
+  "jobs": {
+    "build": {
+      "steps": [
+        {
+          "name": "Build Release",
+          "run": "mkdir -p dist && echo 'Release ready' > dist/release.txt"
+        }
+      ],
+      "artifacts": {
+        "upload": [
+          {
+            "name": "release-bundle",
+            "path": "dist/release.txt"
+          }
+        ]
+      }
+    },
+    "unit-test": {
+      "needs": ["build"],
+      "steps": [
+        {
+          "name": "Run Unit Tests",
+          "run": "sleep 1 && echo 'Unit tests passed'"
+        }
+      ]
+    },
+    "integration-test": {
+      "needs": ["build"],
+      "steps": [
+        {
+          "name": "Run Integration Tests",
+          "run": "sleep 1 && echo 'Integration tests passed'"
+        }
+      ]
+    },
+    "deploy": {
+      "needs": ["build", "unit-test", "integration-test"],
+      "artifacts": {
+        "download": [
+          {
+            "name": "release-bundle",
+            "fromJob": "build",
+            "path": "dist/release.txt"
+          }
+        ]
+      },
+      "steps": [
+        {
+          "name": "Verify Release",
+          "run": "grep -Fxq 'Release ready' dist/release.txt"
+        },
+        {
+          "name": "Deployment Smoke Check",
+          "run": "echo 'Release deployment verified'"
+        }
+      ]
+    }
+  }
+}

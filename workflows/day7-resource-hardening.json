@@ -1,0 +1,38 @@
+{
+  "$schema": "./schema/workflow.schema.json",
+  "name": "day7-resource-hardening",
+  "version": "1.0",
+  "webhook": {
+    "url": "/webhooks/day7-resource-hardening",
+    "methods": ["POST"]
+  },
+  "trigger": {
+    "events": ["push"],
+    "allowedBranches": ["main"],
+    "allowedRepositories": ["example/day7-project"]
+  },
+  "concurrency": {
+    "enabled": true,
+    "group": "day7-resource-hardening",
+    "cancelInProgress": false
+  },
+  "jobs": {
+    "build": {
+      "steps": [
+        {
+          "name": "Build",
+          "run": "echo 'Build successful'"
+        }
+      ]
+    },
+    "test": {
+      "needs": ["build"],
+      "steps": [
+        {
+          "name": "Run Tests",
+          "run": "echo 'Tests successful'"
+        }
+      ]
+    }
+  }
+}

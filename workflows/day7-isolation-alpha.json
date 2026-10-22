@@ -1,0 +1,33 @@
+{
+  "$schema": "./schema/workflow.schema.json",
+  "name": "day7-isolation-alpha",
+  "version": "1.0",
+  "webhook": {
+    "url": "/webhooks/day7-isolation-alpha",
+    "methods": ["POST"]
+  },
+  "trigger": {
+    "events": ["push"],
+    "allowedBranches": ["main"],
+    "allowedRepositories": ["example/alpha-project"]
+  },
+  "jobs": {
+    "build": {
+      "steps": [
+        {
+          "name": "Build Alpha",
+          "run": "echo 'Alpha build complete'"
+        }
+      ]
+    },
+    "test": {
+      "needs": ["build"],
+      "steps": [
+        {
+          "name": "Test Alpha",
+          "run": "echo 'Alpha tests passed'"
+        }
+      ]
+    }
+  }
+}

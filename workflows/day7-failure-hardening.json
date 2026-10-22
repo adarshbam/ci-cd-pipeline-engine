@@ -1,0 +1,33 @@
+{
+  "$schema": "./schema/workflow.schema.json",
+  "name": "day7-failure-hardening",
+  "version": "1.0",
+  "webhook": {
+    "url": "/webhooks/day7-failure-hardening",
+    "methods": ["POST"]
+  },
+  "trigger": {
+    "events": ["push"],
+    "allowedBranches": ["main"],
+    "allowedRepositories": ["example/day7-project"]
+  },
+  "jobs": {
+    "build": {
+      "steps": [
+        {
+          "name": "Build Project",
+          "run": "echo 'Build completed'"
+        }
+      ]
+    },
+    "test": {
+      "needs": ["build"],
+      "steps": [
+        {
+          "name": "Run Tests",
+          "run": "echo 'Tests passed'"
+        }
+      ]
+    }
+  }
+}

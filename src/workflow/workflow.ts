@@ -10,11 +10,14 @@ export interface Workflow {
 
   webhook: {
     url: string;
+    methods?: ("GET" | "POST")[];
   };
 
   trigger: {
     events: string[];
     branches?: Record<string, string>;
+    allowedBranches?: string[];
+    allowedRepositories?: string[];
   };
 
   jobs: Record<string, Job>;

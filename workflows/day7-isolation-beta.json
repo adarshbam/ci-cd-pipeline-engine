@@ -1,0 +1,33 @@
+{
+  "$schema": "./schema/workflow.schema.json",
+  "name": "day7-isolation-beta",
+  "version": "1.0",
+  "webhook": {
+    "url": "/webhooks/day7-isolation-beta",
+    "methods": ["POST"]
+  },
+  "trigger": {
+    "events": ["push"],
+    "allowedBranches": ["develop"],
+    "allowedRepositories": ["example/beta-project"]
+  },
+  "jobs": {
+    "build": {
+      "steps": [
+        {
+          "name": "Build Beta",
+          "run": "echo 'Beta build complete'"
+        }
+      ]
+    },
+    "test": {
+      "needs": ["build"],
+      "steps": [
+        {
+          "name": "Test Beta",
+          "run": "echo 'Beta tests passed'"
+        }
+      ]
+    }
+  }
+}
