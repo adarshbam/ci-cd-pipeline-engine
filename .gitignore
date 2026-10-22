@@ -1,6 +1,8 @@
 node_modules
 runtime/
 dist/
+dashboard/node_modules/
+dashboard/dist/
 
 .env
 .env.*

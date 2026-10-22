@@ -1,18 +1,34 @@
 {
   "name": "ci-cd-pipeline-engine",
   "version": "1.0.0",
-  "description": "",
+  "description": "GitHub CI/CD Engine",
   "main": "index.js",
   "scripts": {
     "dev": "node --env-file=.env --watch --import tsx ./src/server.ts",
     "tunnel": "tsx src/tools/run-ngrok.ts",
     "dev:all": "concurrently \"npm run dev\" \"npm run tunnel\"",
     "build": "tsc",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "test": "tsx --test src/tests/pipeline-engine.test.ts src/tests/pipeline-run.test.ts src/tests/pipeline-finalization.test.ts src/tests/metrics-collector.test.ts src/tests/pipeline-cancellation.test.ts src/tests/pipeline-cancellation-http.test.ts src/tests/milestone4-api.test.ts src/tests/milestone5-security.test.ts src/tests/run-persistence-recovery.test.ts src/tests/stress-concurrent-runs.test.ts",
+    "test:security": "tsx src/tests/milestone5-security.test.ts",
+    "test:persistence": "tsx src/tests/run-persistence-recovery.test.ts",
+    "test:stress": "tsx src/tests/stress-concurrent-runs.test.ts",
+    "test:regression": "tsx src/tests/day7-final-regression.test.ts",
+    "test:all": "tsx src/tools/audit-all-tests.ts",
+    "test:live": "tsx src/tests/day7-live-webhook.test.ts",
+    "dashboard:dev": "npm --prefix dashboard run dev",
+    "dashboard:build": "npm --prefix dashboard run build"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "ci-cd",
+    "github-webhooks",
+    "dag-scheduler",
+    "pipeline-engine",
+    "react-flow",
+    "self-hosted"
+  ],
+  "author": "Adarsh Singh",
+  "license": "MIT",
   "type": "module",
   "dependencies": {
     "express": "^5.2.1"

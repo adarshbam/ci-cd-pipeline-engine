@@ -1,10 +1,28 @@
 import { execFile, spawn, type ChildProcess } from "node:child_process";
+import { existsSync } from "node:fs";
 
 import type { StepExecutionResult } from "../types/step-result.js";
 import { validateTimeoutMs } from "./timeout-validator.js";
 
+// Helper: resolve appropriate bash shell binary across Windows and POSIX
+export function resolveBashCommand(): string {
+  if (process.platform === "win32") {
+    const gitBashCandidates = [
+      "C:\\Program Files\\Git\\bin\\bash.exe",
+      "C:\\Program Files\\Git\\usr\\bin\\bash.exe",
+      "C:\\Program Files (x86)\\Git\\bin\\bash.exe",
+    ];
+    for (const cand of gitBashCandidates) {
+      if (existsSync(cand)) {
+        return cand;
+      }
+    }
+  }
+  return "bash";
+}
+
 // Terminate the spawned process and its children.
-async function terminateProcessTree(child: ChildProcess): Promise<void> {
+export async function terminateProcessTree(child: ChildProcess): Promise<void> {
   const pid = child.pid;
 
   // Never terminate an unknown PID or our own server.
@@ -71,6 +89,7 @@ export async function runProcess(
   args: string[],
   cwd?: string,
   timeoutMs?: number,
+  signal?: AbortSignal,
 ): Promise<StepExecutionResult> {
   // Node.js maximum normal timer delay.
   if (timeoutMs !== undefined && timeoutMs > 2_147_483_647) {
@@ -80,9 +99,21 @@ export async function runProcess(
   return new Promise<StepExecutionResult>((resolve, reject) => {
     const startedAt = new Date();
 
+    if (signal?.aborted) {
+      return resolve({
+        exitCode: null,
+        stdout: "",
+        stderr: "Step cancelled before execution",
+        startedAt,
+        finishedAt: new Date(),
+        status: "CANCELLED",
+      });
+    }
+
     validateTimeoutMs(timeoutMs);
 
-    const scriptRun = spawn("bash", args, {
+    const bashCmd = resolveBashCommand();
+    const scriptRun = spawn(bashCmd, args, {
       cwd,
       windowsHide: true,
 
@@ -120,6 +151,16 @@ export async function runProcess(
       }
     }
 
+    const abortHandler = () => {
+      if (closed) return;
+      stderr += "\nProcess cancelled by user";
+      void terminateProcessTree(scriptRun).catch(() => {});
+    };
+
+    if (signal) {
+      signal.addEventListener("abort", abortHandler, { once: true });
+    }
+
     scriptRun.stdout.on("data", (data) => {
       stdout += data.toString();
     });
@@ -131,10 +172,15 @@ export async function runProcess(
     scriptRun.on("close", (code) => {
       closed = true;
       cleanupTimer();
+      if (signal) {
+        signal.removeEventListener("abort", abortHandler);
+      }
 
       if (hasTimeout) {
         stderr += `\nProcess timed out after ${timeoutMs}ms`;
       }
+
+      const isCancelled = signal?.aborted === true;
 
       const result: StepExecutionResult = {
         exitCode: code,
@@ -142,7 +188,11 @@ export async function runProcess(
         stderr,
         startedAt,
         finishedAt: new Date(),
-        status: code === 0 && !hasTimeout ? "SUCCESS" : "FAILED",
+        status: isCancelled
+          ? "CANCELLED"
+          : code === 0 && !hasTimeout
+            ? "SUCCESS"
+            : "FAILED",
       };
 
       resolve(result);
@@ -151,6 +201,21 @@ export async function runProcess(
     scriptRun.on("error", (error) => {
       closed = true;
       cleanupTimer();
+      if (signal) {
+        signal.removeEventListener("abort", abortHandler);
+      }
+
+      if (signal?.aborted) {
+        return resolve({
+          exitCode: null,
+          stdout,
+          stderr: stderr + `\nProcess error after cancellation: ${error.message}`,
+          startedAt,
+          finishedAt: new Date(),
+          status: "CANCELLED",
+        });
+      }
+
       reject(error);
     });
   });

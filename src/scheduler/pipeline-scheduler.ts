@@ -1,4 +1,4 @@
-import type { Workflow } from "../workflow/workflow.js";
+import type { Workflow, PipelineStatus } from "../workflow/workflow.js";
 import RunPipeline from "../pipeline/pipeline-run.js";
 import { executeJob } from "./job-executor.js";
 import { getReadyJobs, skipBlockedJobs } from "./job-scheduler.js";
@@ -10,12 +10,23 @@ import { executeQueuedJobsSettled } from "./settled-job-executor.js";
 export async function runScheduler(
   workflow: Workflow,
   run: RunPipeline,
+  signal?: AbortSignal,
 ): Promise<void> {
   const queue = new JobQueue();
   const scheduled = new Set<string>();
   const limiter = new ConcurrencyLimiter(2);
 
   while (true) {
+    if ((run.status as PipelineStatus) === "CANCELLED" || signal?.aborted) {
+      for (const job of Object.values(run.jobs)) {
+        if (job.status === "QUEUED") {
+          job.status = "CANCELLED";
+          job.failureReason = "Run was cancelled";
+        }
+      }
+      return;
+    }
+
     const skippedJobs = await skipBlockedJobs(workflow, run);
     const readyJobs = await getReadyJobs(workflow, run);
 
@@ -25,6 +36,9 @@ export async function runScheduler(
       (job) => job.status === "QUEUED" || job.status === "RUNNING",
     );
     if (!hasUnfinishedJobs) {
+      if ((run.status as PipelineStatus) === "CANCELLED") {
+        return;
+      }
       if (
         Object.values(run.jobs).some(
           (job) =>
@@ -43,7 +57,7 @@ export async function runScheduler(
     if (readyJobs.length > 0) {
       await executeQueuedJobsSettled(queue, limiter, async (jobId) => {
         try {
-          await executeJob(workflow, run, jobId);
+          await executeJob(workflow, run, jobId, signal);
         } catch (error) {
           if (run.jobs[jobId]?.status !== "FAILED") {
             throw error;

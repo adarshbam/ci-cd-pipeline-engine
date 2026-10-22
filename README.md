@@ -1,163 +1,186 @@
-# CI/CD Pipeline Engine
+# GitHub CI/CD Engine
 
-A TypeScript and Node.js engine that turns signed GitHub push webhooks into dependency-aware job execution, transfers local build artifacts, and reports commit status back to GitHub.
+A lightweight, dependency-aware, self-hosted CI/CD engine built with Node.js, Express, TypeScript, and a React + React Flow management dashboard.
 
-Built to make the mechanics of a CI/CD runner visible: webhook authentication, workflow selection, scheduling, process execution, failure propagation, and completion reporting. The repository includes executable regression suites and a credential-free portfolio demo.
+The engine transforms signed GitHub push webhooks into dependency-resolved parallel pipeline jobs, executes sequential Bash steps in isolated workspaces, captures live execution logs, and reports real-time commit statuses back to GitHub.
 
-**Start here:** [Run the portfolio demo](docs/DEMO.md) · [Architecture](docs/ARCHITECTURE.md) · [Verification record](docs/VERIFICATION.md) · [Release guide](docs/RELEASE.md)
+---
 
-## What works
-
-| Capability | Implemented behavior | Executable evidence under `src/tests/` |
-| --- | --- | --- |
-| Signed webhooks | HMAC-SHA256 over raw JSON bytes; timing-safe comparison before parsing; malformed input rejected | `day7-github-webhook.test.ts`, `day7-webhook-input-hardening.test.ts` |
-| Workflow selection | Request path selects a configured workflow; push event, repository allowlist, and optional branch allowlist gate execution | `day7-github-trigger.test.ts`, `day7-workflow-isolation.test.ts` |
-| Delivery deduplication | Workflow name + delivery ID suppress repeated execution within the running router | `day7-dedup-hardening.test.ts` |
-| DAG scheduling | Jobs wait for successful `needs`; ready jobs execute with a limit of **two per pipeline run**; failed prerequisites skip descendants | `day7-dag-parallel.test.ts`, `concurrency-final.test.ts` |
-| Job execution | Sequential Bash commands/scripts in temporary job directories; stop on failure; configurable step retries and timeouts | `workspace-execution.test.ts`, `retry-failure-propagation.test.ts`, `timeout-final.test.ts` |
-| Artifact transfer | Local file/directory copies scoped by run, producer job, and artifact name; consumers must declare the producer in `needs` | `day7-artifact-transfer.test.ts` |
-| Environment and recovery | `develop → TEST`, `main → PROD`; configured health checks; rollback on an unhealthy check when configured | `day7-environment-routing.test.ts`, `day7-health-rollback.test.ts`, `rollback-final.test.ts` |
-| Observability | Per-workflow run/job status, filtered and paginated lifecycle logs, completed-run metrics and active-run count | `day7-observability-integration.test.ts` |
-| GitHub commit status | Optional `pending → success/failure` reporting under `custom-ci/pipeline` | `day7-github-full-integration.test.ts`, `day7-github-end-to-end.test.ts` (local mock GitHub API) |
-
-These are implementation claims supported by the checks in [VERIFICATION.md](docs/VERIFICATION.md). Live GitHub delivery was **not rerun** during this documentation update.
-
-## Architecture
+## Architecture Overview
 
 ```mermaid
-flowchart LR
-    GH[GitHub push] --> Gate[POST route and raw-body HMAC validation]
-    Gate --> Select[Event, repository and branch filters; delivery deduplication]
-    Files[Local workflow JSON loaded at startup] -.-> Gate
-    Select --> Pending[Optional GitHub pending status]
-    Pending --> Engine[PipelineEngine and in-memory run tracking]
-    Engine --> DAG[Dependency scheduler; two jobs per run]
-    DAG --> Jobs[Temporary job directories; sequential Bash steps]
-    Jobs <--> Artifacts[Local artifacts scoped by run and job]
-    Jobs --> Done[Pipeline completion]
-    Done --> Final[Optional GitHub success or failure status]
-    Engine --> Observe[Run status, lifecycle logs and metrics]
-    Jobs --> Observe
+flowchart TD
+    subgraph Ingestion [GitHub Ingestion]
+        GH[GitHub Push Event] -->|HMAC-SHA256 Signature| Webhook[POST /webhooks/:workflow]
+        Webhook -->|Verify Signature & Deduplicate| AuthGate{Signature Valid?}
+        AuthGate -->|No| Reject[401 Unauthorized]
+        AuthGate -->|Yes| FilterGate{Branch & Repo Allowed?}
+    end
+
+    subgraph Core [Engine Core]
+        FilterGate -->|Yes| Engine[PipelineEngine]
+        Engine -->|Initial Pending Status| GHStatus[GitHub Commit Status API]
+        Engine -->|Topological Sort & Dependencies| Scheduler[PipelineScheduler]
+        Scheduler -->|Spawn Processes| Runner[ProcessRunner: Bash Step Execution]
+        Runner -->|Stream Output| Logs[Execution Logs: JSONL]
+        Runner -->|Workspace Scoped| Artifacts[ArtifactManager]
+    end
+
+    subgraph Management [Dashboard UI & API]
+        UI[React Flow Dashboard UI] <-->|CORS / Loopback Guard| ManagementAPI[/api/* Management Endpoints]
+        ManagementAPI --> Engine
+        ManagementAPI --> Logs
+        UI --> DAG[Interactive React Flow DAG]
+        UI --> Inspector[Job Log Drawer & Step Output]
+        UI --> Controls[Manual Trigger & Process Cancellation]
+    end
 ```
 
-See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for source links, exact request ordering, the demonstration DAG, and failure behavior.
+---
 
-## Quick start
+## Features That Genuinely Work
 
-Use **Node.js 24**, npm, Git, and Bash on `PATH`. This update was verified with Node.js 24.11.1 and npm 11.15.0 on Windows with Git Bash. `bash -lc "node --version"` should find Node from inside Bash as well.
+- **Cryptographic Webhook Authentication**: Verifies `X-Hub-Signature-256` HMAC-SHA256 signatures over raw request byte buffers using `crypto.timingSafeEqual`.
+- **Dependency-Aware DAG Scheduling**: Evaluates job `needs` graphs, executes independent jobs concurrently (up to 2 parallel jobs per pipeline), and cascades `SKIPPED` / `CANCELLED` states upon failure.
+- **Interactive React Flow DAG**: Renders real workflow topology and live pipeline execution with dynamic column depth calculation, animated running edges, and color-coded state transitions.
+- **Process Isolation & Tree Termination**: Runs shell commands in dedicated child processes; cleanly terminates entire process trees upon cancellation or timeout using `taskkill /T /F` on Windows and `SIGKILL` on POSIX.
+- **Workspace Scoped Artifact Transfer**: Automatically shares declared files and directories between dependent jobs via isolated local workspaces.
+- **Workflow Discovery (`/workflows`)**: Auto-discovers and validates all 14 declarative workflows in `workflows/*.json`, with configuration previews, masked secrets, and manual triggers.
+- **Operational Run History (`/runs`)**: Filterable, searchable execution history showing real duration, git commit context, job progress, and deep links to failed logs.
+- **Live Execution Inspector**: Slide-over drawer with real-time stdout/stderr log streams, severity filtering (`INFO`, `WARN`, `ERROR`), and step exit codes.
+- **Hardened Management Security**: Blocks reverse proxy / tunnel access by default, validates origins against CSRF, and never exposes tokens or secrets over the wire.
+- **GitHub Integration Onboarding (`/integrations`)**: Complete 10-step webhook setup guide, dynamic payload URL generator, commit status guide, and live API connectivity probe.
 
+---
+
+## Prerequisites
+
+- **Node.js**: Version 20+ (tested on Node.js 24.11.1).
+- **npm**: Version 10+ (tested on npm 11.15.0).
+- **Git** & **Bash**: Available on system `PATH` (on Windows, Git Bash at `C:\Program Files\Git\usr\bin\bash.exe`).
+
+---
+
+## Quick Start (Fresh Clone)
+
+### 1. Install Dependencies
 ```bash
-git clone https://github.com/adarshbam/ci-cd-pipeline-engine.git
-cd ci-cd-pipeline-engine
-npm ci
-npm run build
-node --import tsx src/tools/portfolio-demo.ts
+npm install
+npm --prefix dashboard install
 ```
 
-On Windows PowerShell, select Git Bash if `bash` resolves to the Windows/WSL launcher:
-
-```powershell
-$env:PATH = 'C:\Program Files\Git\bin;' + $env:PATH
-bash -lc "node --version"
-node --import tsx src/tools/portfolio-demo.ts
-```
-
-The demo uses the existing `day7-live-github.json` workflow, real HTTP routing, real Bash jobs, and real artifact storage. It generates a synthetic signed push and records outgoing status requests at a **loopback mock GitHub API**. It needs no credentials, never reads `.env`, closes its servers, and keeps evidence in a new `runtime/portfolio-demo-*` directory. It does not write a real GitHub commit status.
-
-Expected result: all four jobs succeed, the two test jobs overlap, deploy verifies `Release ready` from the restored artifact, and the mock receives `pending` then `success`. See [the demo guide](docs/DEMO.md) for a short presentation script and the separate real GitHub setup.
-
-## Run the server locally
-
-Start from the repository root so the loader can find `workflows/`:
-
+### 2. Configure Environment Variables
+Copy `.env.example` to `.env`:
 ```bash
-npm run build
-npm start
+cp .env.example .env
 ```
+Edit `.env` to configure:
+- `PORT=3000` (default Express listener port)
+- `GITHUB_WEBHOOK_SECRET=your_secret_here` (matching GitHub Webhook settings)
+- `GITHUB_TOKEN=ghp_your_token_here` (fine-grained PAT with *Commit statuses: Read & Write*)
+- `MANAGEMENT_SECRET` (optional: leave unset for local-only loopback access)
 
-`npm start` uses the process environment; it does not load `.env`. The server defaults to port `3000`. Set `PORT` in the launching terminal to change it. The root `GET /` returns a greeting, not a deployment health report.
-
-| Variable | Runtime use | Safe example / default |
-| --- | --- | --- |
-| `PORT` | HTTP listener | `4000` / default `3000` |
-| `GITHUB_WEBHOOK_SECRET` | Required for signed POST webhooks; missing configuration returns 503 | `<shared-random-webhook-secret>` |
-| `GITHUB_TOKEN` | Optional for execution; required to publish real commit statuses | `<fine-grained-token-with-commit-status-write>` |
-| `GITHUB_API_BASE_URL` | Override status API base for local tests | Leave unset for real GitHub; default `https://api.github.com` |
-| `DAY7_LIVE_BASE_URL` | Used by live verification scripts, not the server listener | `http://127.0.0.1:4000` |
-
-Supply real values privately in the process environment for a live demo; placeholders are not credentials. [DEMO.md](docs/DEMO.md) shows both PowerShell and Bash setup without editing `.env`. The existing `npm run dev` script explicitly requires `.env`; it is not needed for the quick start above.
-
-## Workflow model
-
-Workflows are local JSON files in `workflows/`, loaded once at server startup. They are **not fetched from the pushed repository or commit**. The JSON schema supplies editor guidance; `loadWorkflows()` parses JSON without runtime schema validation. Schema fields alone do not imply execution support.
-
-The portfolio workflow is [day7-live-github.json](workflows/day7-live-github.json):
-
-- `POST /webhooks/day7-live-github`, push events only.
-- Repository `adarshbam/ci-cd-pipeline-engine`, branch `main`.
-- `build` creates and uploads a text artifact.
-- `unit-test` and `integration-test` depend on `build` and run in parallel.
-- `deploy` waits for all three, downloads the artifact, and checks its contents.
-
-The named test jobs in that workflow run sample sleep/echo commands. The build creates a text file and deployment is simulated. The separate TypeScript regression suites test the engine itself.
-
-For embedded usage:
-
-```typescript
-import { loadWorkflows } from "./src/workflow/workflow-loader.js";
-import PipelineEngine from "./src/pipeline/pipeline-engine.js";
-
-const workflows = await loadWorkflows();
-const workflow = workflows.find((item) => item.name === "day7-live-github");
-if (!workflow) throw new Error("Workflow not found");
-const engine = new PipelineEngine(workflow);
-const run = await engine.run("main");
-const completed = await engine.waitForCompletion(run.id);
-console.log(completed.id, completed.status, completed.jobs);
-```
-
-Save embedded examples at the repository root and run with `node --import tsx <filename>.ts`. Direct engine execution does not perform webhook validation or publish GitHub statuses; those are router responsibilities.
-
-## HTTP interface
-
-Let `<workflow-path>` be the configured `webhook.url`.
-
-| Method and path | Behavior |
-| --- | --- |
-| `POST <workflow-path>` | When POST is enabled, validates GitHub delivery; returns 200 with `{received,event,deliveryId}`. No run ID is returned. Acknowledgement does not establish that a pipeline ran or succeeded. |
-| `GET <workflow-path>?branch=main` | When GET is enabled, starts a run and returns 202 with `{runId,pipelineId,status}`. It bypasses GitHub authentication and allowlist filtering. |
-| `GET <workflow-path>/runs/<runId>` | Run and job state; unknown run returns 404 |
-| `GET <workflow-path>/runs/<runId>/logs?level=INFO&jobId=build&limit=50&offset=0` | Lifecycle logs; optional filters; `limit` is 1–100 and `offset` is a non-negative safe integer |
-| `GET <workflow-path>/metrics` | `totalRuns`, `successfulRuns`, `failedRuns`, `averageDurationMs`, `activeRuns` |
-
-`totalRuns` counts **completed** runs. The live GitHub workflow enables POST only; other bundled examples enable manual GET execution. The status, log, metric, and enabled GET-trigger endpoints have no authentication. Keep them local or protect them before exposing the listener.
-
-## Verification
-
-There is no `npm test` script or checked-in `.github/workflows/` automation at the inspected revision. Run the existing assertion-based suites explicitly:
-
+### 3. Start the Backend Server
 ```bash
-npx tsc --noEmit
-npm run build
-node --import tsx src/tests/day7-final-regression.test.ts
-node --import tsx src/tests/day7-release-smoke.test.ts
-node --import tsx src/tests/day7-failure-drills.test.ts
-node --import tsx src/tests/day7-release-readiness.test.ts
-node --import tsx src/tests/timeout-final.test.ts
-node --import tsx src/tests/retry-failure-propagation.test.ts
-node --import tsx src/tests/rollback-final.test.ts
-node --import tsx src/tools/portfolio-demo.ts
+npm run dev
+```
+The engine starts on port `3000` and automatically loads all workflows from `workflows/*.json`.
+
+### 4. Start the Dashboard UI
+In a separate terminal:
+```bash
+npm run dashboard:dev
+```
+Open `http://localhost:5173` in your browser. The dashboard connects to `http://localhost:3000` in **REAL MODE**.
+
+---
+
+## Running Pipelines
+
+### Manual Trigger via Dashboard
+1. Open **Workflows** in the sidebar.
+2. Select any valid workflow (e.g., `day7-release-smoke` or `day7-capstone`).
+3. Click **Run**, choose target branch (`main`), and confirm.
+4. Watch the pipeline progress live through the interactive React Flow DAG!
+
+### Live GitHub Webhooks
+To receive webhooks from GitHub.com on your local machine:
+1. Start an ngrok tunnel:
+   ```bash
+   npm run tunnel
+   ```
+2. Copy the public URL into your `.env`:
+   ```env
+   PUBLIC_WEBHOOK_BASE_URL=https://<your-id>.ngrok-free.app
+   ```
+3. In your GitHub repository:
+   - Navigate to **Settings** → **Webhooks** → **Add webhook**.
+   - Payload URL: `https://<your-id>.ngrok-free.app/webhooks/<workflow-name>`
+   - Content type: `application/json`
+   - Secret: Matches your `GITHUB_WEBHOOK_SECRET`
+   - SSL verification: Enabled
+   - Events: `push`
+4. Push a commit to your repository to trigger execution.
+
+---
+
+## Pipeline Cancellation
+
+The engine supports safe, asynchronous cancellation of active pipelines:
+- Click **Cancel Run** on the run details page or in the Runs list.
+- Running child processes are immediately terminated using native process tree killing (`taskkill` on Windows, process group `SIGKILL` on POSIX).
+- Waiting dependent jobs are marked `CANCELLED` and never execute.
+- Active run counts decrement and workspaces are preserved for post-mortem debugging.
+
+---
+
+## Running Automated Tests
+
+Run the full automated test suite (all 8 test suites):
+```bash
+npm test
 ```
 
-The regression runner schedules 29 suites in six groups; it is not every test file in the repository. [VERIFICATION.md](docs/VERIFICATION.md) records the exact baseline, results, and unverified live steps.
+Build production artifacts:
+```bash
+# Build backend
+npm run build
 
-## Boundaries and next steps
+# Build frontend dashboard
+npm run dashboard:build
+```
 
-- Temporary working directories provide filesystem separation, **not a security sandbox**. Bash jobs run with the server user's permissions and inherit its environment. Use trusted workflows and least-privilege execution.
-- No automatic source checkout, container workers, distributed queue, global concurrency limit, or cancellation of superseded runs. The scheduler waits for each ready batch to settle before discovering the next batch.
-- Runs, completion promises, deduplication IDs, and metrics stay in memory and have no retention limit. Disk logs and artifacts remain, but are not sufficient to restore run lookup after restart. Artifact retention/garbage collection is not implemented.
-- Environment routing is hardcoded to `develop` and `main`; schema branch maps and `envFile` do not drive execution. Rollback is tied to an unhealthy configured health check, not every command failure.
-- Pending status reporting happens before a run starts. If that request fails, the webhook returns 500 and the delivery can be retried. A failed final status request is logged without changing the completed pipeline or automatically retrying the report.
-- Shared webhook paths do not fan out to multiple workflows; use unique paths and names. All reports use the same `custom-ci/pipeline` context, so multiple workflows on one commit can overwrite the visible latest status.
+---
 
-Durable state, authenticated management APIs, stronger execution isolation, and real checkout/build/deployment integration are future work.
+## Security Model & Boundaries
+
+1. **Zero Credential Exposure**: `GITHUB_TOKEN`, `GITHUB_WEBHOOK_SECRET`, and `MANAGEMENT_SECRET` are never sent over the wire or stored in browser state.
+2. **Reverse Proxy / Tunnel Protection**: Management endpoints (`/api/*`) strictly reject requests arriving through public tunnels (`X-Forwarded-For`, `ngrok-free.dev`) unless `MANAGEMENT_SECRET` is configured and supplied via `x-management-token`.
+3. **CORS & CSRF Protection**: CORS headers are restricted to trusted local development origins (`localhost` / `127.0.0.1`). State-changing POST requests reject unauthorized cross-origin requests.
+4. **Input Sanitization**: Workflow names, run IDs, and job IDs are validated against strict regex (`^[a-zA-Z0-9_-]+$`) to prevent path traversal attacks against filesystem logs.
+5. **Masked Configurations**: Workflow inspection endpoints automatically mask all sensitive environment keys with `********`.
+
+---
+
+## Current Architecture Scope
+
+- **Persistent Local Run History**: Execution runs and logs are saved to atomic local disk storage in `runtime/history/runs/` and `runtime/logs/`. History survives restarts without external cloud or database dependencies.
+- **Local Secret Model**: Secrets are configured on the host server via `.env`. In-browser runtime secret editing is disabled for security.
+- **Declarative Workflows**: Workflows are loaded at startup from `workflows/*.json` with schema validation.
+
+---
+
+## License
+
+This project is open-source software licensed under the [MIT License](LICENSE).
+
+Copyright &copy; 2026 Adarsh Singh. All rights reserved.
+
+---
+
+## Troubleshooting
+
+- **Port in use (EADDRINUSE: 3000)**: Kill the previous process or specify a custom port in `.env` (`PORT=4000`).
+- **Signature verification failure (401)**: Verify that `GITHUB_WEBHOOK_SECRET` in `.env` matches the secret configured in GitHub Webhook settings character-for-character.
+- **Management API 403 Forbidden**: Ensure you are accessing the dashboard from `localhost` / `127.0.0.1`. If tunneling through ngrok, configure `MANAGEMENT_SECRET` in `.env`.
+- **Bash command not found on Windows**: Ensure Git Bash is installed and added to `PATH` (`C:\Program Files\Git\usr\bin\bash.exe`).

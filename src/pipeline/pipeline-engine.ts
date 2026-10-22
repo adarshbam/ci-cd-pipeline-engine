@@ -6,6 +6,7 @@ import {
   type MetricsSnapshot,
 } from "../metrics/metrics-collector.js";
 import { runScheduler } from "../scheduler/pipeline-scheduler.js";
+import { saveRun } from "../storage/run-store.js";
 import type { Environment, Workflow } from "../workflow/workflow.js";
 import RunPipeline from "./pipeline-run.js";
 
@@ -13,6 +14,7 @@ class PipelineEngine {
   private workflow: Workflow;
   private runs = new Map<string, RunPipeline>();
   private completionPromises = new Map<string, Promise<void>>();
+  private abortControllers = new Map<string, AbortController>();
   private metrics = new MetricsCollector();
 
   constructor(workflow: Workflow) {
@@ -31,6 +33,9 @@ class PipelineEngine {
       resolvedEnvironment,
     );
 
+    const abortController = new AbortController();
+    this.abortControllers.set(pipelineRun.id, abortController);
+
     pipelineRun.start();
     await appendLogEntry(
       createLogEntry({
@@ -41,10 +46,35 @@ class PipelineEngine {
     );
     this.metrics.startRun(pipelineRun.id);
     this.runs.set(pipelineRun.id, pipelineRun);
+    saveRun(pipelineRun).catch(() => {});
 
-    const completionPromise = runScheduler(this.workflow, pipelineRun)
+    const completionPromise = runScheduler(
+      this.workflow,
+      pipelineRun,
+      abortController.signal,
+    )
       .then(async () => {
+        this.abortControllers.delete(pipelineRun.id);
+
+        if (pipelineRun.status === "CANCELLED") {
+          this.metrics.cancelRun(pipelineRun.id);
+          saveRun(pipelineRun).catch(() => {});
+          await appendLogEntry(
+            createLogEntry({
+              runId: pipelineRun.id,
+              level: "WARN",
+              message: "Pipeline cancelled by user",
+            }),
+          );
+          return;
+        }
+
         const succeeded = pipelineRun.status === "SUCCESS";
+        this.metrics.finishRun(
+          pipelineRun.id,
+          succeeded ? "SUCCESS" : "FAILED",
+        );
+        saveRun(pipelineRun).catch(() => {});
 
         await appendLogEntry(
           createLogEntry({
@@ -57,11 +87,22 @@ class PipelineEngine {
         );
       })
       .catch(async (err) => {
+        this.abortControllers.delete(pipelineRun.id);
+
+        if (pipelineRun.status === "CANCELLED") {
+          this.metrics.cancelRun(pipelineRun.id);
+          saveRun(pipelineRun).catch(() => {});
+          return;
+        }
+
         console.error("Scheduler failed:", err);
 
         if (pipelineRun.status === "RUNNING") {
           pipelineRun.fail();
         }
+
+        this.metrics.finishRun(pipelineRun.id, "FAILED");
+        saveRun(pipelineRun).catch(() => {});
 
         await appendLogEntry(
           createLogEntry({
@@ -73,16 +114,6 @@ class PipelineEngine {
           }),
         );
       })
-      .finally(() => {
-        if (pipelineRun.status === "RUNNING") {
-          pipelineRun.fail();
-        }
-
-        this.metrics.finishRun(
-          pipelineRun.id,
-          pipelineRun.status === "SUCCESS" ? "SUCCESS" : "FAILED",
-        );
-      })
       .catch((err) => {
         console.error("Pipeline finalization failed:", err);
       });
@@ -92,9 +123,60 @@ class PipelineEngine {
     return pipelineRun;
   }
 
+  async cancelRun(runId: string): Promise<boolean> {
+    const run = this.runs.get(runId);
+    if (!run) return false;
+
+    if (run.status === "SUCCESS" || run.status === "FAILED") {
+      return false;
+    }
+
+    if (run.status === "CANCELLED") {
+      return true;
+    }
+
+    run.cancel();
+
+    const controller = this.abortControllers.get(runId);
+    if (controller) {
+      controller.abort();
+      this.abortControllers.delete(runId);
+    }
+
+    this.metrics.cancelRun(runId);
+
+    for (const job of Object.values(run.jobs)) {
+      if (job.status === "RUNNING" || job.status === "QUEUED") {
+        job.status = "CANCELLED";
+        job.failureReason = "Cancelled by user";
+      }
+    }
+
+    saveRun(run).catch(() => {});
+
+    await appendLogEntry(
+      createLogEntry({
+        runId: run.id,
+        level: "WARN",
+        message: "Pipeline cancelled by user",
+      }),
+    ).catch(() => {});
+
+    return true;
+  }
+
+  addHistoricalRun(run: RunPipeline): void {
+    if (!this.runs.has(run.id)) {
+      this.runs.set(run.id, run);
+    }
+  }
+
   getRun(runId: string): RunPipeline | undefined {
-    // Retrieve the run from your Map
     return this.runs.get(runId);
+  }
+
+  getAllRuns(): RunPipeline[] {
+    return Array.from(this.runs.values());
   }
 
   getMetricsSnapshot(): MetricsSnapshot {

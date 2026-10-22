@@ -1,4 +1,5 @@
 import type { RollbackResult } from "../rollback/rollback-executor.js";
+import type { StepExecutionResult } from "../types/step-result.js";
 
 export interface Workflow {
   name: string;
@@ -76,6 +77,10 @@ export interface EnvironmentConfig {
   healthUrl?: string;
 }
 
+export interface StepExecutionDetail extends StepExecutionResult {
+  name: string;
+}
+
 export interface PipelineRun {
   id: string;
   pipelineId: string;
@@ -93,10 +98,15 @@ export interface JobRun {
   jobId: string;
   runnerId?: string;
   status: PipelineStatus;
+  startedAt?: Date;
+  finishedAt?: Date;
+  durationMs?: number;
+  exitCode?: number | null;
   branch?: string;
   environment?: Environment;
   failureReason?: string;
   rollbackResult?: RollbackResult;
+  stepResults?: StepExecutionDetail[];
 }
 
 export interface RollbackConfig {

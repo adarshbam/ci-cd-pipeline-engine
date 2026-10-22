@@ -5,6 +5,7 @@ export async function runScript(
   runScriptPath: string,
   cwd?: string,
   timeoutMs?: number,
+  signal?: AbortSignal,
 ): Promise<StepExecutionResult> {
-  return runProcess([runScriptPath], cwd, timeoutMs);
+  return runProcess([runScriptPath], cwd, timeoutMs, signal);
 }

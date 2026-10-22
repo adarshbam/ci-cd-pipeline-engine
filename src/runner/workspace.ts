@@ -17,9 +17,15 @@ export async function withWorkspace<T>(
   try {
     return await operation(workspacePath);
   } finally {
-    await rm(workspacePath, {
-      recursive: true,
-      force: true,
-    });
+    try {
+      await rm(workspacePath, {
+        recursive: true,
+        force: true,
+        maxRetries: 10,
+        retryDelay: 100,
+      });
+    } catch {
+      // Ignore if Windows temporary handle delay prevents immediate removal
+    }
   }
 }

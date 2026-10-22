@@ -9,19 +9,32 @@ import { appendLogEntry } from "../logging/log-store.js";
 import { executeRollbackSteps } from "../rollback/rollback-steps.js";
 import { executeStepsInExistingWorkspace } from "../runner/job-runner.js";
 import { withWorkspace } from "../runner/workspace.js";
-import type { Workflow, PipelineRun } from "../workflow/workflow.js";
+import type {
+  Workflow,
+  PipelineRun,
+  PipelineStatus,
+} from "../workflow/workflow.js";
 
 export async function executeJob(
   workflow: Workflow,
   run: PipelineRun,
   jobId: string,
+  signal?: AbortSignal,
 ): Promise<void> {
-  // Your implementation
   const jobConfig = workflow.jobs[jobId];
   const jobRun = run.jobs[jobId];
 
   if (!jobConfig || !jobRun) {
     throw new Error(`Job ${jobId} not found`);
+  }
+
+  if (
+    (run.status as PipelineStatus) === "CANCELLED" ||
+    signal?.aborted
+  ) {
+    jobRun.status = "CANCELLED";
+    jobRun.failureReason = "Run was cancelled";
+    return;
   }
 
   if (jobRun.status !== "QUEUED") {
@@ -31,9 +44,8 @@ export async function executeJob(
   const runBranch = run.branch;
   const runEnvironment = run.environment;
 
-  // Continue with execution here
-
   jobRun.status = "RUNNING";
+  jobRun.startedAt = new Date();
 
   await appendLogEntry(
     createLogEntry({
@@ -52,6 +64,13 @@ export async function executeJob(
 
     const stepsExecutionResult = await withWorkspace(async (workspacePath) => {
       for (const download of downloads) {
+        if (
+          (run.status as PipelineStatus) === "CANCELLED" ||
+          signal?.aborted
+        ) {
+          return [];
+        }
+
         const dependencies = jobConfig.needs ?? [];
 
         if (!dependencies.includes(download.fromJob))
@@ -77,17 +96,21 @@ export async function executeJob(
         );
       }
 
-      const stepsExecutionResult = await executeStepsInExistingWorkspace(
+      const results = await executeStepsInExistingWorkspace(
         jobConfig.steps,
         workspacePath,
+        signal,
       );
 
+      if (results.some((stepResult) => stepResult.status === "FAILED")) {
+        return results;
+      }
+
       if (
-        stepsExecutionResult.some(
-          (stepResult) => stepResult.status === "FAILED",
-        )
+        (run.status as PipelineStatus) === "CANCELLED" ||
+        signal?.aborted
       ) {
-        return stepsExecutionResult;
+        return results;
       }
 
       for (const upload of uploads) {
@@ -99,8 +122,27 @@ export async function executeJob(
         await saveArtifact(run.id, jobId, upload.name, resolvedPath);
       }
 
-      return stepsExecutionResult;
+      return results;
     });
+
+    jobRun.finishedAt = new Date();
+    jobRun.durationMs =
+      jobRun.finishedAt.getTime() - jobRun.startedAt.getTime();
+
+    jobRun.stepResults = stepsExecutionResult.map((res, idx) => ({
+      ...res,
+      name: jobConfig.steps[idx]?.name || `Step ${idx + 1}`,
+    }));
+
+    if (
+      (run.status as PipelineStatus) === "CANCELLED" ||
+      signal?.aborted ||
+      stepsExecutionResult.some((s) => s.status === "CANCELLED")
+    ) {
+      jobRun.status = "CANCELLED";
+      jobRun.failureReason = "Job was cancelled";
+      return;
+    }
 
     const failedStep = stepsExecutionResult.find(
       (stepResult) => stepResult.status === "FAILED",
@@ -108,6 +150,7 @@ export async function executeJob(
 
     if (failedStep) {
       jobRun.status = "FAILED";
+      jobRun.exitCode = failedStep.exitCode;
 
       jobRun.failureReason =
         failedStep.stderr?.trim() ||
@@ -195,7 +238,9 @@ export async function executeJob(
           }),
         );
       }
+
       jobRun.status = "SUCCESS";
+      jobRun.exitCode = 0;
       await appendLogEntry(
         createLogEntry({
           runId: run.id,
@@ -206,6 +251,15 @@ export async function executeJob(
       );
     }
   } catch (err) {
+    if (
+      (run.status as PipelineStatus) === "CANCELLED" ||
+      signal?.aborted
+    ) {
+      jobRun.status = "CANCELLED";
+      jobRun.failureReason = "Job was cancelled";
+      return;
+    }
+
     jobRun.status = "FAILED";
 
     jobRun.failureReason ??= err instanceof Error ? err.message : String(err);

@@ -69,6 +69,11 @@ export class MetricsCollector {
     this.recordCompletedRun(runId, status, duration);
     this.activeRuns.delete(runId);
   }
+
+  cancelRun(runId: string): void {
+    this.activeRuns.delete(runId);
+  }
+
   getActiveRunCount(): number {
     return this.activeRuns.size;
   }
