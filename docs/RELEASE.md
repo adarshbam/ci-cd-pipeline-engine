@@ -1,5 +1,10 @@
 # Custom CI/CD Pipeline Engine — Release Guide
 
+For a credential-free walkthrough and a concise presentation script, start with
+[DEMO.md](DEMO.md). See [ARCHITECTURE.md](ARCHITECTURE.md) for implemented behavior
+and [VERIFICATION.md](VERIFICATION.md) for checks actually rerun and live steps
+that remain unverified.
+
 ## 1. Overview
 
 A custom TypeScript/Node.js CI/CD engine supporting:
@@ -39,16 +44,21 @@ npx tsc
 
 ## 4. Environment Configuration
 
-Copy `.env.example` to `.env`.
+Use process environment variables as shown in [DEMO.md](DEMO.md). No `.env`
+creation or editing is required. `.env.example` documents the variable names
+with safe placeholders.
 
 Set the following:
 
-- `PORT`: HTTP server port, if supported by the server configuration.
+- `PORT`: HTTP server port (default `3000`; use `4000` for the examples below).
 - `GITHUB_WEBHOOK_SECRET`: The GitHub webhook signing secret.
 - `GITHUB_TOKEN`: Fine-grained GitHub token with Commit statuses read/write access.
 - `DAY7_LIVE_BASE_URL`: URL used by live integration tests.
 
-Do not commit `.env` or share credentials.
+Leave `GITHUB_API_BASE_URL` unset for real GitHub; it is only needed for a mock
+API. Do not commit `.env` or share credentials. The existing
+`node --env-file=.env` mode remains available when you already maintain a private
+environment file; the commands below use the launching terminal's environment.
 
 ## 5. Start the Server
 
@@ -58,10 +68,10 @@ Build the server:
 npx tsc
 ```
 
-Run it with the environment loaded:
+Run it with the process environment configured:
 
 ```bash
-node --env-file=.env dist/server.js
+npm start
 ```
 
 Verify the actual server port in its startup logs.
@@ -103,10 +113,12 @@ Start the server and ngrok.
 Run the live verification test:
 
 ```bash
-node --env-file=.env --import tsx src/tests/day7-live-webhook.test.ts
+node --import tsx src/tests/day7-live-webhook.test.ts
 ```
 
-When the test prints `READY FOR REAL GITHUB PUSH`, create or use a fresh commit on the allowed branch.
+Prepare and review a fresh commit on `main` before starting the verifier: it
+captures HEAD at startup. When it prints `READY FOR REAL GITHUB PUSH`, push that
+same commit. An up-to-date push does not trigger a new delivery.
 
 Then push:
 
@@ -126,7 +138,7 @@ Verify:
 Run the local release verification:
 
 ```bash
-node --env-file=.env --import tsx src/tests/day7-full-release.test.ts
+node --import tsx src/tests/day7-full-release.test.ts
 ```
 
 This verifies:
