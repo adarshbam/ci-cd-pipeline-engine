@@ -53,7 +53,7 @@
       "steps": [
         {
           "name": "Running Lint",
-          "run": "echo \"Lint passed !✅\""
+          "run": "echo \"Lint passed !!✅\""
         }
       ]
     },
