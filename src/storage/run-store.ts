@@ -2,6 +2,7 @@ import { mkdir, readdir, readFile, rename, unlink, writeFile } from "node:fs/pro
 import { randomBytes } from "node:crypto";
 import path from "node:path";
 import type {
+  CommitStatusInfo,
   Environment,
   JobRun,
   PipelineRun,
@@ -25,6 +26,10 @@ export interface StoredRun {
   environment?: Environment | undefined;
   jobs: Record<string, StoredJobRun>;
   workflow: Workflow;
+  commitSha?: string | undefined;
+  repository?: string | undefined;
+  deliveryId?: string | undefined;
+  commitStatus?: CommitStatusInfo | undefined;
 }
 
 const DEFAULT_STORAGE_DIR = path.resolve("runtime/history/runs");
@@ -76,6 +81,10 @@ export function serializeRun(run: PipelineRun): StoredRun {
     environment: run.environment,
     jobs: serializedJobs,
     workflow: run.workflow,
+    commitSha: run.commitSha,
+    repository: run.repository,
+    deliveryId: run.deliveryId,
+    commitStatus: run.commitStatus,
   };
 }
 

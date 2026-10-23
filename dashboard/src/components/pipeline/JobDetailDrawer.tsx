@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Terminal,
-  Clock,
   Loader2,
   Copy,
   Check,
@@ -10,12 +9,7 @@ import {
   Search,
   ChevronDown,
   ChevronRight,
-  Filter,
-  FileText,
-  AlertCircle,
-  Ban,
-  CheckCircle2,
-  Cpu
+  AlertCircle
 } from 'lucide-react';
 import { Job, JobLogEntry } from '../../types';
 import { Drawer } from '../ui/Drawer';
@@ -66,7 +60,6 @@ export const JobDetailDrawer: React.FC<JobDetailDrawerProps> = ({
           } else if (job.logs && job.logs.length > 0) {
             setLogs(job.logs);
           } else {
-            // Default realistic entries
             setLogs([
               {
                 id: '1',
@@ -100,7 +93,6 @@ export const JobDetailDrawer: React.FC<JobDetailDrawerProps> = ({
 
     fetchLogs();
 
-    // Auto-poll logs if job is currently running
     let interval: ReturnType<typeof setInterval> | undefined;
     if (job.status === 'running') {
       interval = setInterval(fetchLogs, 1500);
@@ -112,14 +104,12 @@ export const JobDetailDrawer: React.FC<JobDetailDrawerProps> = ({
     };
   }, [job, isOpen, levelFilter]);
 
-  // Auto-scroll to bottom of logs
   useEffect(() => {
     if (autoScroll && logsEndRef.current) {
       logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [logs, autoScroll]);
 
-  // Filter logs by search query
   const filteredLogs = useMemo(() => {
     return logs.filter((log) => {
       const matchesSearch =
@@ -160,8 +150,8 @@ export const JobDetailDrawer: React.FC<JobDetailDrawerProps> = ({
       onClose={onClose}
       width="lg"
       title={
-        <div className="flex items-center gap-2.5">
-          <span className="font-mono text-base font-bold text-white">{job.name}</span>
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-sm font-bold text-[#F4F4F5]">{job.name}</span>
           <StatusBadge status={job.status} size="xs" />
         </div>
       }
@@ -175,7 +165,7 @@ export const JobDetailDrawer: React.FC<JobDetailDrawerProps> = ({
               onClick={copyLogs}
               icon={
                 copiedLogs ? (
-                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                  <Check className="w-3.5 h-3.5 text-[#10B981]" />
                 ) : (
                   <Copy className="w-3.5 h-3.5" />
                 )
@@ -211,26 +201,26 @@ export const JobDetailDrawer: React.FC<JobDetailDrawerProps> = ({
       <div className="space-y-4">
         {/* Failure Diagnostics Banner */}
         {job.status === 'failed' && (
-          <div className="p-3.5 rounded-xl bg-red-950/40 border border-red-800/50 space-y-2">
+          <div className="p-3.5 rounded-lg bg-[#241215] border border-[#4C1D24] space-y-2">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-red-400 font-semibold text-xs">
-                <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+              <div className="flex items-center gap-2 text-[#F87171] font-semibold text-xs">
+                <AlertCircle className="w-4 h-4 shrink-0 text-[#F87171]" />
                 <span>Job Failed with Exit Code {job.exitCode ?? 1}</span>
               </div>
-              <span className="text-[10px] font-mono text-red-400/80 bg-red-900/30 px-2 py-0.5 rounded border border-red-800/40">
+              <span className="text-[10px] font-mono text-[#F87171] bg-[#34181C] px-1.5 py-0.5 rounded border border-[#4C1D24]">
                 Exit {job.exitCode ?? 1}
               </span>
             </div>
             {job.failureReason && (
-              <p className="text-xs text-red-200 font-mono bg-red-950/60 p-2 rounded border border-red-900/40 break-words">
+              <p className="text-xs text-[#F87171] font-mono bg-[#1E0F12] p-2 rounded border border-[#3E151B] break-words">
                 {job.failureReason}
               </p>
             )}
             {job.steps && job.steps.some((s: any) => s.status === 'failed' || (s.exitCode && s.exitCode !== 0)) && (
-              <div className="text-[11px] text-slate-300 flex items-center justify-between pt-1">
-                <span className="text-slate-400">
+              <div className="text-[11px] text-[#A1A1AA] flex items-center justify-between pt-1">
+                <span>
                   Failing step:{' '}
-                  <span className="text-white font-medium">
+                  <span className="text-white font-medium font-mono">
                     {
                       job.steps.find(
                         (s: any) =>
@@ -253,9 +243,9 @@ export const JobDetailDrawer: React.FC<JobDetailDrawerProps> = ({
                       setExpandedStepIndex(failedIdx);
                     }
                   }}
-                  className="text-xs text-sky-400 hover:text-sky-300 font-semibold underline underline-offset-2 transition-colors cursor-pointer"
+                  className="text-xs text-[#3B82F6] hover:text-[#60A5FA] font-medium underline underline-offset-2 transition-colors cursor-pointer"
                 >
-                  Inspect Failing Step &amp; Stderr &rarr;
+                  Inspect Failing Step &rarr;
                 </button>
               </div>
             )}
@@ -263,61 +253,61 @@ export const JobDetailDrawer: React.FC<JobDetailDrawerProps> = ({
         )}
 
         {/* Sub-tabs inside Drawer */}
-        <div className="flex border-b border-[#1b2a4a] gap-4 text-xs font-semibold">
+        <div className="flex border-b border-[#27272A] gap-4 text-xs font-medium">
           <button
             onClick={() => setActiveTab('logs')}
             className={`pb-2.5 relative transition-colors ${
               activeTab === 'logs'
-                ? 'text-sky-400 font-bold'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'text-[#F4F4F5] font-semibold'
+                : 'text-[#71717A] hover:text-[#D4D4D8]'
             }`}
           >
             Live Logs
             {activeTab === 'logs' && (
-              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-sky-400 shadow-[0_0_8px_rgba(56,189,248,0.8)]" />
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#3B82F6]" />
             )}
           </button>
           <button
             onClick={() => setActiveTab('steps')}
             className={`pb-2.5 relative transition-colors ${
               activeTab === 'steps'
-                ? 'text-sky-400 font-bold'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'text-[#F4F4F5] font-semibold'
+                : 'text-[#71717A] hover:text-[#D4D4D8]'
             }`}
           >
             Step Execution ({job.steps?.length || 2} steps)
             {activeTab === 'steps' && (
-              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-sky-400 shadow-[0_0_8px_rgba(56,189,248,0.8)]" />
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#3B82F6]" />
             )}
           </button>
           <button
             onClick={() => setActiveTab('details')}
             className={`pb-2.5 relative transition-colors ${
               activeTab === 'details'
-                ? 'text-sky-400 font-bold'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'text-[#F4F4F5] font-semibold'
+                : 'text-[#71717A] hover:text-[#D4D4D8]'
             }`}
           >
             Metadata
             {activeTab === 'details' && (
-              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-sky-400 shadow-[0_0_8px_rgba(56,189,248,0.8)]" />
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#3B82F6]" />
             )}
           </button>
         </div>
 
         {/* Tab 1: Terminal Log Viewer */}
         {activeTab === 'logs' && (
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             {/* Filter and Search toolbar */}
             <div className="flex items-center justify-between gap-2 text-xs">
               <div className="relative flex-1">
-                <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-500" />
+                <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-[#71717A]" />
                 <input
                   type="text"
                   placeholder="Search logs..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-[#0a1122] border border-[#1b2b48] rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-sky-500 font-mono"
+                  className="w-full bg-[#141519] border border-[#27272A] rounded-md pl-8 pr-3 py-1.5 text-xs text-[#F4F4F5] placeholder-[#71717A] focus:outline-none focus:border-[#3B82F6] font-mono"
                 />
               </div>
 
@@ -325,7 +315,7 @@ export const JobDetailDrawer: React.FC<JobDetailDrawerProps> = ({
                 <select
                   value={levelFilter}
                   onChange={(e) => setLevelFilter(e.target.value)}
-                  className="bg-[#0a1122] border border-[#1b2b48] text-xs text-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-sky-500"
+                  className="bg-[#141519] border border-[#27272A] text-xs text-[#D4D4D8] rounded-md px-2.5 py-1.5 focus:outline-none focus:border-[#3B82F6]"
                 >
                   <option value="ALL">All Levels</option>
                   <option value="INFO">INFO</option>
@@ -333,12 +323,12 @@ export const JobDetailDrawer: React.FC<JobDetailDrawerProps> = ({
                   <option value="ERROR">ERROR</option>
                 </select>
 
-                <label className="flex items-center gap-1.5 text-[11px] text-slate-400 cursor-pointer select-none ml-1">
+                <label className="flex items-center gap-1.5 text-[11px] text-[#A1A1AA] cursor-pointer select-none ml-1">
                   <input
                     type="checkbox"
                     checked={autoScroll}
                     onChange={(e) => setAutoScroll(e.target.checked)}
-                    className="rounded border-[#1b2b48] text-sky-500 focus:ring-0 bg-[#0a1122]"
+                    className="rounded border-[#27272A] text-[#3B82F6] focus:ring-0 bg-[#141519]"
                   />
                   <span>Follow</span>
                 </label>
@@ -346,26 +336,26 @@ export const JobDetailDrawer: React.FC<JobDetailDrawerProps> = ({
             </div>
 
             {/* Console Output Area */}
-            <div className="rounded-xl bg-[#050811] border border-[#18263f] overflow-hidden shadow-inner">
-              <div className="px-4 py-2 border-b border-[#142036] bg-[#080d1a] flex items-center justify-between text-xs text-slate-400">
-                <div className="flex items-center gap-2">
-                  <Terminal className="w-3.5 h-3.5 text-sky-400" />
-                  <span className="font-mono text-[11px]">console output</span>
+            <div className="rounded-lg bg-[#0B0C0E] border border-[#27272A] overflow-hidden">
+              <div className="px-3.5 py-2 border-b border-[#27272A] bg-[#141519] flex items-center justify-between text-xs text-[#71717A]">
+                <div className="flex items-center gap-1.5 font-mono text-[11px]">
+                  <Terminal className="w-3.5 h-3.5 text-[#3B82F6]" />
+                  <span>console output</span>
                 </div>
-                <span className="text-[10px] text-emerald-400 font-mono flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-[10px] text-[#34D399] font-mono flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#10B981]" />
                   live stream
                 </span>
               </div>
 
-              <div className="p-3.5 font-mono text-[11px] leading-relaxed space-y-1 max-h-[380px] overflow-y-auto">
+              <div className="p-3 font-mono text-[11px] leading-relaxed space-y-1 max-h-[380px] overflow-y-auto">
                 {isLoadingLogs && logs.length === 0 ? (
-                  <div className="py-8 text-center text-slate-500 flex items-center justify-center gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin text-sky-400" />
-                    <span>Loading real execution logs...</span>
+                  <div className="py-8 text-center text-[#71717A] flex items-center justify-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-[#3B82F6]" />
+                    <span>Loading execution logs...</span>
                   </div>
                 ) : filteredLogs.length === 0 ? (
-                  <div className="py-8 text-center text-slate-500">
+                  <div className="py-8 text-center text-[#71717A]">
                     <span>No log output matching query</span>
                   </div>
                 ) : (
@@ -373,30 +363,30 @@ export const JobDetailDrawer: React.FC<JobDetailDrawerProps> = ({
                     const getLevelClass = () => {
                       switch (log.level?.toLowerCase()) {
                         case 'error':
-                          return 'text-red-400 bg-red-950/40 border-red-800/40';
+                          return 'text-[#F87171] bg-[#241215] border-[#4C1D24]';
                         case 'warn':
-                          return 'text-amber-400 bg-amber-950/40 border-amber-800/40';
+                          return 'text-[#FBBF24] bg-[#241A0E] border-[#4C3415]';
                         case 'success':
-                          return 'text-emerald-400 bg-emerald-950/40 border-emerald-800/40';
+                          return 'text-[#34D399] bg-[#0D1F17] border-[#164E35]';
                         default:
-                          return 'text-sky-300 bg-sky-950/30 border-sky-800/30';
+                          return 'text-[#60A5FA] bg-[#0E1B2E] border-[#1D3557]';
                       }
                     };
 
                     return (
                       <div
                         key={log.id}
-                        className="flex items-start gap-2 hover:bg-[#0a1224]/70 py-0.5 px-1 rounded transition-colors"
+                        className="flex items-start gap-2 hover:bg-[#141519] py-0.5 px-1 rounded transition-colors"
                       >
-                        <span className="text-slate-600 select-none shrink-0 font-mono text-[10px]">
+                        <span className="text-[#52525B] select-none shrink-0 font-mono text-[10px]">
                           {log.timestamp}
                         </span>
                         <span
-                          className={`uppercase text-[9px] px-1 py-0.2 rounded border font-semibold shrink-0 select-none ${getLevelClass()}`}
+                          className={`uppercase text-[9px] px-1 py-0.2 rounded border font-medium shrink-0 select-none ${getLevelClass()}`}
                         >
                           {log.level}
                         </span>
-                        <span className="flex-1 break-all text-slate-300">
+                        <span className="flex-1 break-all text-[#D4D4D8]">
                           {log.message}
                         </span>
                       </div>
@@ -411,7 +401,7 @@ export const JobDetailDrawer: React.FC<JobDetailDrawerProps> = ({
 
         {/* Tab 2: Step Execution Breakdown */}
         {activeTab === 'steps' && (
-          <div className="space-y-2.5">
+          <div className="space-y-2">
             {(job.steps && job.steps.length > 0
               ? job.steps
               : [
@@ -433,21 +423,21 @@ export const JobDetailDrawer: React.FC<JobDetailDrawerProps> = ({
               return (
                 <div
                   key={idx}
-                  className="rounded-xl bg-[#0d1629] border border-[#1b2b48] overflow-hidden"
+                  className="rounded-lg bg-[#141519] border border-[#22242A] overflow-hidden"
                 >
                   <div
                     onClick={() => setExpandedStepIndex(isExpanded ? null : idx)}
-                    className="p-3 flex items-center justify-between cursor-pointer hover:bg-[#101b33] transition-colors"
+                    className="p-3 flex items-center justify-between cursor-pointer hover:bg-[#181A22] transition-colors"
                   >
-                    <div className="flex items-center gap-3">
-                      <span className="font-mono text-xs text-slate-500 w-4">
+                    <div className="flex items-center gap-2.5">
+                      <span className="font-mono text-xs text-[#71717A] w-4">
                         {idx + 1}
                       </span>
                       <div>
-                        <h5 className="text-xs font-semibold text-slate-200">
+                        <h5 className="text-xs font-semibold text-[#F4F4F5] font-mono">
                           {step.name}
                         </h5>
-                        <div className="flex items-center gap-2 mt-0.5 text-[10px] text-slate-500 font-mono">
+                        <div className="flex items-center gap-2 mt-0.5 text-[10px] text-[#71717A] font-mono">
                           <span>{step.duration || '4s'}</span>
                           <span>•</span>
                           <span>
@@ -455,8 +445,8 @@ export const JobDetailDrawer: React.FC<JobDetailDrawerProps> = ({
                             <span
                               className={
                                 step.exitCode === 0
-                                  ? 'text-emerald-400'
-                                  : 'text-red-400'
+                                  ? 'text-[#10B981]'
+                                  : 'text-[#EF4444]'
                               }
                             >
                               {step.exitCode ?? '0'}
@@ -468,38 +458,38 @@ export const JobDetailDrawer: React.FC<JobDetailDrawerProps> = ({
                     <div className="flex items-center gap-2">
                       <StatusBadge status={step.status as any} size="xs" />
                       {isExpanded ? (
-                        <ChevronDown className="w-4 h-4 text-slate-400" />
+                        <ChevronDown className="w-4 h-4 text-[#71717A]" />
                       ) : (
-                        <ChevronRight className="w-4 h-4 text-slate-400" />
+                        <ChevronRight className="w-4 h-4 text-[#71717A]" />
                       )}
                     </div>
                   </div>
 
                   {/* Expandable Step Console Output */}
                   {isExpanded && (
-                    <div className="p-3 bg-[#060a14] border-t border-[#18263f] font-mono text-[11px] space-y-1">
+                    <div className="p-3 bg-[#0B0C0E] border-t border-[#22242A] font-mono text-[11px] space-y-1">
                       {step.stdout && (
                         <div>
-                          <span className="text-[10px] text-sky-400 font-semibold block mb-0.5">
+                          <span className="text-[10px] text-[#3B82F6] font-semibold block mb-0.5">
                             stdout:
                           </span>
-                          <pre className="text-slate-300 whitespace-pre-wrap bg-[#080e1c] p-2 rounded border border-[#192640]">
+                          <pre className="text-[#D4D4D8] whitespace-pre-wrap bg-[#141519] p-2 rounded border border-[#22242A]">
                             {step.stdout}
                           </pre>
                         </div>
                       )}
                       {step.stderr && (
                         <div>
-                          <span className="text-[10px] text-red-400 font-semibold block mb-0.5">
+                          <span className="text-[10px] text-[#F87171] font-semibold block mb-0.5">
                             stderr:
                           </span>
-                          <pre className="text-red-300 whitespace-pre-wrap bg-red-950/20 p-2 rounded border border-red-900/30">
+                          <pre className="text-[#F87171] whitespace-pre-wrap bg-[#241215] p-2 rounded border border-[#4C1D24]">
                             {step.stderr}
                           </pre>
                         </div>
                       )}
                       {!step.stdout && !step.stderr && (
-                        <span className="text-slate-500 italic">
+                        <span className="text-[#71717A] italic text-xs">
                           No direct console output captured for this step.
                         </span>
                       )}
@@ -513,50 +503,50 @@ export const JobDetailDrawer: React.FC<JobDetailDrawerProps> = ({
 
         {/* Tab 3: Job Metadata */}
         {activeTab === 'details' && (
-          <div className="space-y-3 p-4 rounded-xl bg-[#0d1629] border border-[#1b2b48] text-xs">
-            <div className="flex justify-between py-1 border-b border-[#18263f]">
-              <span className="text-slate-400">Job Identifier:</span>
-              <span className="font-mono text-slate-200">{job.id}</span>
+          <div className="space-y-2 p-3.5 rounded-lg bg-[#141519] border border-[#22242A] text-xs">
+            <div className="flex justify-between py-1 border-b border-[#22242A]">
+              <span className="text-[#71717A]">Job Identifier:</span>
+              <span className="font-mono text-[#F4F4F5]">{job.id}</span>
             </div>
-            <div className="flex justify-between py-1 border-b border-[#18263f]">
-              <span className="text-slate-400">Pipeline Run ID:</span>
-              <span className="font-mono text-sky-400">{job.runId}</span>
+            <div className="flex justify-between py-1 border-b border-[#22242A]">
+              <span className="text-[#71717A]">Pipeline Run ID:</span>
+              <span className="font-mono text-[#3B82F6]">{job.runId}</span>
             </div>
-            <div className="flex justify-between py-1 border-b border-[#18263f]">
-              <span className="text-slate-400">Status:</span>
+            <div className="flex justify-between py-1 border-b border-[#22242A]">
+              <span className="text-[#71717A]">Status:</span>
               <StatusBadge status={job.status} size="xs" />
             </div>
-            <div className="flex justify-between py-1 border-b border-[#18263f]">
-              <span className="text-slate-400">Dependencies:</span>
-              <span className="font-mono text-slate-200">
+            <div className="flex justify-between py-1 border-b border-[#22242A]">
+              <span className="text-[#71717A]">Dependencies:</span>
+              <span className="font-mono text-[#D4D4D8]">
                 {job.dependsOn?.length ? job.dependsOn.join(', ') : 'None (Root Node)'}
               </span>
             </div>
-            <div className="flex justify-between py-1 border-b border-[#18263f]">
-              <span className="text-slate-400">Exit Code:</span>
+            <div className="flex justify-between py-1 border-b border-[#22242A]">
+              <span className="text-[#71717A]">Exit Code:</span>
               <span
                 className={`font-mono font-bold ${
-                  job.exitCode === 0 ? 'text-emerald-400' : 'text-red-400'
+                  job.exitCode === 0 ? 'text-[#10B981]' : 'text-[#EF4444]'
                 }`}
               >
                 {job.exitCode ?? (job.status === 'success' ? '0' : 'None')}
               </span>
             </div>
             {job.failureReason && (
-              <div className="flex justify-between py-1 border-b border-[#18263f]">
-                <span className="text-slate-400">Failure Reason:</span>
-                <span className="font-mono text-red-400 max-w-xs text-right break-words">
+              <div className="flex justify-between py-1 border-b border-[#22242A]">
+                <span className="text-[#71717A]">Failure Reason:</span>
+                <span className="font-mono text-[#F87171] max-w-xs text-right break-words">
                   {job.failureReason}
                 </span>
               </div>
             )}
-            <div className="flex justify-between py-1 border-b border-[#18263f]">
-              <span className="text-slate-400">Workspace Isolation:</span>
-              <span className="font-mono text-slate-300">OS Temporary Tempdir (NTFS / POSIX)</span>
+            <div className="flex justify-between py-1 border-b border-[#22242A]">
+              <span className="text-[#71717A]">Workspace Isolation:</span>
+              <span className="font-mono text-[#A1A1AA]">OS Temporary Tempdir (NTFS / POSIX)</span>
             </div>
             <div className="flex justify-between py-1">
-              <span className="text-slate-400">Execution Shell:</span>
-              <span className="font-mono text-slate-300">bash -c [command-runner]</span>
+              <span className="text-[#71717A]">Execution Shell:</span>
+              <span className="font-mono text-[#A1A1AA]">bash -c [command-runner]</span>
             </div>
           </div>
         )}

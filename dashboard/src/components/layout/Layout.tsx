@@ -5,24 +5,23 @@ import { TopBar } from './TopBar';
 
 export const Layout: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [selectedWorkflow, setSelectedWorkflow] = useState('deploy-main');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [selectedWorkflow, setSelectedWorkflow] = useState('day7-capstone');
 
   return (
-    <div className="min-h-screen bg-[#070b14] text-slate-100 flex flex-col lg:flex-row antialiased selection:bg-cyan-500/30 selection:text-cyan-200">
-      {/* Ambient background glows */}
-      <div className="fixed top-0 left-1/4 w-96 h-96 bg-sky-500/5 blur-[120px] pointer-events-none rounded-full" />
-      <div className="fixed bottom-0 right-1/4 w-96 h-96 bg-emerald-500/5 blur-[120px] pointer-events-none rounded-full" />
-
+    <div className="min-h-screen bg-[#0B0C0E] text-[#F4F4F5] flex flex-col lg:flex-row antialiased selection:bg-[#3B82F6]/30 selection:text-white">
       {/* Sidebar */}
       <Sidebar
         isOpenMobile={mobileMenuOpen}
         onCloseMobile={() => setMobileMenuOpen(false)}
+        isCollapsed={sidebarCollapsed}
       />
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
         <TopBar
           onMenuClick={() => setMobileMenuOpen(true)}
+          onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
           selectedWorkflow={selectedWorkflow}
           onSelectWorkflow={(name) => setSelectedWorkflow(name)}
         />

@@ -7,8 +7,20 @@ import {
 } from "../metrics/metrics-collector.js";
 import { runScheduler } from "../scheduler/pipeline-scheduler.js";
 import { saveRun } from "../storage/run-store.js";
-import type { Environment, Workflow } from "../workflow/workflow.js";
+import type {
+  CommitStatusInfo,
+  Environment,
+  Workflow,
+} from "../workflow/workflow.js";
 import RunPipeline from "./pipeline-run.js";
+
+export interface RunOptions {
+  branch?: string;
+  commitSha?: string;
+  repository?: string;
+  deliveryId?: string;
+  commitStatus?: CommitStatusInfo;
+}
 
 class PipelineEngine {
   private workflow: Workflow;
@@ -21,7 +33,23 @@ class PipelineEngine {
     this.workflow = workflow;
   }
 
-  async run(branch?: string): Promise<RunPipeline> {
+  async run(branchOrOptions?: string | RunOptions): Promise<RunPipeline> {
+    let branch: string | undefined;
+    let commitSha: string | undefined;
+    let repository: string | undefined;
+    let deliveryId: string | undefined;
+    let commitStatus: CommitStatusInfo | undefined;
+
+    if (typeof branchOrOptions === "string") {
+      branch = branchOrOptions;
+    } else if (branchOrOptions && typeof branchOrOptions === "object") {
+      branch = branchOrOptions.branch;
+      commitSha = branchOrOptions.commitSha;
+      repository = branchOrOptions.repository;
+      deliveryId = branchOrOptions.deliveryId;
+      commitStatus = branchOrOptions.commitStatus;
+    }
+
     let resolvedEnvironment: Environment | undefined;
 
     if (branch !== undefined) {
@@ -32,6 +60,10 @@ class PipelineEngine {
       branch,
       resolvedEnvironment,
     );
+    if (commitSha) pipelineRun.commitSha = commitSha;
+    if (repository) pipelineRun.repository = repository;
+    if (deliveryId) pipelineRun.deliveryId = deliveryId;
+    if (commitStatus) pipelineRun.commitStatus = commitStatus;
 
     const abortController = new AbortController();
     this.abortControllers.set(pipelineRun.id, abortController);

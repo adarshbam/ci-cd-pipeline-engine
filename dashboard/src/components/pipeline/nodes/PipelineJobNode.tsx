@@ -45,9 +45,13 @@ export const PipelineJobNode: React.FC<any> = ({ data, selected }) => {
   const isCancelled = job.status === 'cancelled';
   const isQueued = job.status === 'queued';
   const isSkipped = job.status === 'skipped';
+  const isIdle = job.status === 'idle';
 
   // State-specific styling
   const getContainerStyle = () => {
+    if (isIdle) {
+      return 'bg-[#0b1426] border border-dashed border-slate-600 hover:border-slate-400 shadow-lg';
+    }
     if (isRunning) {
       return 'bg-[#0a1832] border-2 border-sky-400 shadow-[0_0_25px_rgba(56,189,248,0.45)] ring-2 ring-sky-500/25';
     }
@@ -63,11 +67,12 @@ export const PipelineJobNode: React.FC<any> = ({ data, selected }) => {
     if (isSkipped) {
       return 'bg-[#0c1322]/70 border border-slate-800 opacity-75 hover:opacity-100';
     }
-    // Queued
+    // Real Queued
     return 'bg-[#0d1628] border border-slate-700/80 hover:border-slate-500 shadow-md';
   };
 
   const getIconContainerStyle = () => {
+    if (isIdle) return 'bg-slate-800/80 border border-slate-700 text-slate-300';
     if (isRunning) return 'bg-sky-950/80 border border-sky-500/40 text-sky-400 shadow-[0_0_8px_rgba(56,189,248,0.5)]';
     if (isSuccess) return 'bg-emerald-950/60 text-emerald-400';
     if (isFailed) return 'bg-red-950/70 border border-red-500/40 text-red-400';
@@ -77,6 +82,13 @@ export const PipelineJobNode: React.FC<any> = ({ data, selected }) => {
   };
 
   const getBadgeElement = () => {
+    if (isIdle) {
+      return (
+        <span className="text-[10px] text-slate-400 font-mono px-2 py-0.5 rounded-md bg-slate-800 border border-slate-700">
+          Not run
+        </span>
+      );
+    }
     if (isRunning) {
       return (
         <div className="w-5 h-5 flex items-center justify-center text-sky-400 shrink-0">
@@ -169,7 +181,9 @@ export const PipelineJobNode: React.FC<any> = ({ data, selected }) => {
       {job.subBadge && (
         <span
           className={`mt-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-semibold border select-none ${
-            isSkipped
+            isIdle
+              ? 'bg-slate-900/60 text-slate-500 border-slate-800'
+              : isSkipped
               ? 'bg-slate-900/80 text-slate-500 border-slate-800'
               : isFailed
               ? 'bg-red-950/70 text-red-400 border-red-800/40'

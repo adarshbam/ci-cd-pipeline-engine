@@ -1,25 +1,19 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Copy,
   Check,
   CheckCircle2,
   AlertCircle,
-  HelpCircle,
-  Shield,
-  ShieldCheck,
-  ShieldAlert,
   Server,
   Network,
   GitBranch,
-  Key,
-  Globe,
-  Radio,
+  ShieldCheck,
   ExternalLink,
   RefreshCw,
   Terminal,
   Activity,
-  Layers,
-  Lock
+  ArrowRight
 } from 'lucide-react';
 import { pipelineApi } from '../api/client';
 import { IntegrationsReadiness, BackendWorkflow } from '../types';
@@ -30,6 +24,7 @@ import { Skeleton } from '../components/ui/Skeleton';
 import { useDataMode } from '../context/DataModeContext';
 
 export const IntegrationsPage: React.FC = () => {
+  const navigate = useNavigate();
   const { dataMode, isDemoMode } = useDataMode();
   const [readiness, setReadiness] = useState<IntegrationsReadiness | null>(null);
   const [workflows, setWorkflows] = useState<BackendWorkflow[]>([]);
@@ -127,22 +122,22 @@ export const IntegrationsPage: React.FC = () => {
   if (loading || !readiness) {
     return (
       <div className="space-y-4">
-        <Skeleton className="h-10 w-64" />
-        <Skeleton className="h-44 w-full rounded-2xl" />
-        <Skeleton className="h-64 w-full rounded-2xl" />
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-28 w-full rounded-xl" />
+        <Skeleton className="h-64 w-full rounded-xl" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-white font-mono">
-            GitHub Integration & Setup Guide
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[#F4F4F5] font-mono">
+            GitHub Integration &amp; Setup Guide
           </h1>
-          <p className="text-xs sm:text-sm text-slate-400 mt-1">
+          <p className="text-xs sm:text-sm text-[#A1A1AA] mt-1">
             End-to-end interactive setup guide to connect your GitHub repository with this self-hosted CI/CD Engine.
           </p>
         </div>
@@ -159,86 +154,86 @@ export const IntegrationsPage: React.FC = () => {
       </div>
 
       {/* SECTION A — Engine Readiness Dashboard */}
-      <div>
-        <div className="flex items-center gap-2 mb-3">
-          <Server className="w-4 h-4 text-sky-400" />
-          <h2 className="text-sm font-bold uppercase tracking-wider text-slate-200 font-mono">
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Server className="w-4 h-4 text-[#3B82F6]" />
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-[#A1A1AA]">
             Section A — Engine Core Readiness
           </h2>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
           {/* 1. Backend Server Online/Offline */}
-          <Card variant="surface" className="p-4 rounded-xl border-[#1b2b48]">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-slate-400 font-medium">Backend Server</span>
+          <Card variant="surface" className="p-3.5 rounded-xl border-[#27272A]">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs text-[#A1A1AA] font-medium">Backend Server</span>
               <StatusBadge
                 status={readiness.backendOnline ? 'online' : 'failed'}
                 size="xs"
               />
             </div>
-            <div className="text-lg font-bold text-white font-mono">
+            <div className="text-lg font-bold text-[#F4F4F5] font-mono">
               {readiness.backendOnline ? `Port :${readiness.port}` : 'Offline'}
             </div>
-            <span className="text-[10px] text-slate-500 font-mono mt-1 block">
+            <span className="text-[10px] text-[#71717A] font-mono mt-1 block">
               {readiness.backendOnline ? 'Express HTTP engine active' : 'Run `npm run dev` to start'}
             </span>
           </Card>
 
           {/* 2. Loaded Workflows */}
-          <Card variant="surface" className="p-4 rounded-xl border-[#1b2b48]">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-slate-400 font-medium">Loaded Workflows</span>
-              <GitBranch className="w-4 h-4 text-sky-400" />
+          <Card variant="surface" className="p-3.5 rounded-xl border-[#27272A]">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs text-[#A1A1AA] font-medium">Loaded Workflows</span>
+              <GitBranch className="w-3.5 h-3.5 text-[#3B82F6]" />
             </div>
-            <div className="text-lg font-bold text-white font-mono">
+            <div className="text-lg font-bold text-[#F4F4F5] font-mono">
               {readiness.loadedWorkflowsCount}
             </div>
-            <span className="text-[10px] text-slate-500 font-mono mt-1 block">
+            <span className="text-[10px] text-[#71717A] font-mono mt-1 block">
               Active pipelines in `workflows/`
             </span>
           </Card>
 
           {/* 3. GitHub Credentials Status */}
-          <Card variant="surface" className="p-4 rounded-xl border-[#1b2b48]">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-slate-400 font-medium">GitHub Status Token</span>
+          <Card variant="surface" className="p-3.5 rounded-xl border-[#27272A]">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs text-[#A1A1AA] font-medium">GitHub Status Token</span>
               {readiness.githubTokenConfigured ? (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-[#0D1F17] text-[#34D399] border border-[#164E35]">
                   Configured
                 </span>
               ) : (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-[#241A0E] text-[#FBBF24] border border-[#4C3415]">
                   Not Configured
                 </span>
               )}
             </div>
-            <div className="text-sm font-bold text-slate-200 font-mono truncate">
+            <div className="text-sm font-semibold text-[#D4D4D8] font-mono truncate">
               {readiness.githubTokenConfigured ? 'Token Present in .env' : 'Missing in .env'}
             </div>
-            <span className="text-[10px] text-slate-500 font-mono mt-1 block">
+            <span className="text-[10px] text-[#71717A] font-mono mt-1 block">
               GITHUB_TOKEN (never transmitted)
             </span>
           </Card>
 
           {/* 4. Public Webhook Base URL */}
-          <Card variant="surface" className="p-4 rounded-xl border-[#1b2b48]">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-slate-400 font-medium">Public Webhook URL</span>
+          <Card variant="surface" className="p-3.5 rounded-xl border-[#27272A]">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs text-[#A1A1AA] font-medium">Public Webhook URL</span>
               {hasPublicUrl ? (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-[#0D1F17] text-[#34D399] border border-[#164E35]">
                   Configured
                 </span>
               ) : (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-[#241A0E] text-[#FBBF24] border border-[#4C3415]">
                   Local Only
                 </span>
               )}
             </div>
-            <div className="text-xs font-bold text-slate-200 font-mono truncate" title={readiness.publicWebhookBaseUrl || 'Not configured'}>
+            <div className="text-xs font-semibold text-[#D4D4D8] font-mono truncate" title={readiness.publicWebhookBaseUrl || 'Not configured'}>
               {readiness.publicWebhookBaseUrl ? readiness.publicWebhookBaseUrl : 'http://localhost:3000'}
             </div>
-            <span className="text-[10px] text-slate-500 font-mono mt-1 block">
+            <span className="text-[10px] text-[#71717A] font-mono mt-1 block">
               {hasPublicUrl ? 'Public tunnel ready' : 'Configure PUBLIC_WEBHOOK_BASE_URL'}
             </span>
           </Card>
@@ -246,34 +241,34 @@ export const IntegrationsPage: React.FC = () => {
       </div>
 
       {/* SECTION B — GitHub Webhook Setup Guide */}
-      <Card variant="surface" className="p-6 rounded-2xl border-[#1b2b48] bg-gradient-to-br from-[#0c152a] to-[#070b16] space-y-6">
+      <Card variant="surface" className="p-5 rounded-xl border-[#27272A] space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-          <div className="flex items-start gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-700 flex items-center justify-center text-white shrink-0 shadow-lg">
-              <svg className="w-6 h-6 fill-current" viewBox="0 0 24 24">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-lg bg-[#18191E] border border-[#27272A] flex items-center justify-center text-[#F4F4F5] shrink-0">
+              <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
                 <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
               </svg>
             </div>
             <div>
-              <h2 className="text-base font-bold text-white font-mono">
+              <h2 className="text-sm font-semibold text-[#F4F4F5] font-mono">
                 Section B — Step-by-Step GitHub Webhook Setup
               </h2>
-              <p className="text-xs text-slate-300 mt-1 max-w-2xl leading-relaxed">
-                Connect your repository to the engine so pushes automatically trigger pipeline execution with cryptographic HMAC-SHA256 signature verification.
+              <p className="text-xs text-[#A1A1AA] mt-1 max-w-2xl leading-relaxed">
+                Connect your repository to the engine so git pushes automatically trigger pipeline execution with HMAC-SHA256 signature verification.
               </p>
             </div>
           </div>
 
           {/* Workflow Target Picker */}
-          <div className="flex items-center gap-2 bg-[#060a14] px-3 py-1.5 rounded-xl border border-[#1b2b48] text-xs font-mono">
-            <span className="text-slate-400">Target Pipeline:</span>
+          <div className="flex items-center gap-2 bg-[#141519] px-2.5 py-1.5 rounded-md border border-[#27272A] text-xs font-mono">
+            <span className="text-[#71717A]">Target Pipeline:</span>
             <select
               value={selectedWorkflowName}
               onChange={(e) => setSelectedWorkflowName(e.target.value)}
-              className="bg-transparent text-sky-300 font-bold focus:outline-none cursor-pointer"
+              className="bg-transparent text-[#3B82F6] font-semibold focus:outline-none cursor-pointer"
             >
               {workflows.map((w) => (
-                <option key={w.name} value={w.name} className="bg-[#0b1325] text-slate-200">
+                <option key={w.name} value={w.name} className="bg-[#141519] text-[#D4D4D8]">
                   {w.name}
                 </option>
               ))}
@@ -283,156 +278,156 @@ export const IntegrationsPage: React.FC = () => {
 
         {/* Public Base URL Notice if Local Only */}
         {!hasPublicUrl && (
-          <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-3 text-xs text-amber-200 leading-relaxed">
-            <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+          <div className="p-3 rounded-lg bg-[#1A160F] border border-[#3E2B15] flex items-start gap-2.5 text-xs text-[#FDE68A] leading-relaxed">
+            <AlertCircle className="w-4 h-4 text-[#F59E0B] shrink-0 mt-0.5" />
             <div>
-              <strong>Public Webhook Base URL Missing:</strong> The generated payload URL currently uses <code className="text-white">localhost</code>.
-              For GitHub to deliver live webhooks from GitHub.com, start a secure tunnel using <code className="text-white">npm run tunnel</code> (or <code className="text-white">ngrok http 3000</code>) and add <code className="text-white">PUBLIC_WEBHOOK_BASE_URL=https://&lt;your-id&gt;.ngrok-free.app</code> to your <code className="text-white">.env</code>.
+              <strong>Public Ingestion Tunnel Missing:</strong> The generated payload URL currently uses <code className="text-white">localhost</code>.
+              For GitHub to deliver live webhooks from GitHub.com, run <code className="text-white">npm run tunnel</code> and add <code className="text-white">PUBLIC_WEBHOOK_BASE_URL=https://&lt;id&gt;.ngrok-free.app</code> to your <code className="text-white">.env</code>.
             </div>
           </div>
         )}
 
         {/* Payload URL Box with Copy */}
-        <div className="space-y-2">
-          <label className="text-xs font-semibold text-slate-300">
-            1. GitHub Webhook Payload URL for <code className="text-sky-300">{selectedWorkflowName}</code>:
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-[#D4D4D8]">
+            1. Webhook Payload URL for <code className="text-[#3B82F6] font-mono">{selectedWorkflowName}</code>:
           </label>
           <div className="flex items-center gap-2">
             <input
               type="text"
               readOnly
               value={constructedWebhookUrl}
-              className="w-full px-3.5 py-2.5 bg-[#060a14] border border-[#1c2c49] rounded-xl text-xs font-mono text-sky-200 focus:outline-none"
+              className="w-full px-3 py-1.5 bg-[#0B0C0E] border border-[#27272A] rounded-md text-xs font-mono text-[#D4D4D8] focus:outline-none"
             />
             <Button
               variant="secondary"
               size="sm"
               onClick={copyWebhookUrl}
-              icon={copiedUrl ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+              icon={copiedUrl ? <Check className="w-3.5 h-3.5 text-[#10B981]" /> : <Copy className="w-3.5 h-3.5" />}
             >
               {copiedUrl ? 'Copied' : 'Copy'}
             </Button>
           </div>
         </div>
 
-        {/* 10 Detailed Setup Steps */}
-        <div className="space-y-3 pt-4 border-t border-[#182640]">
-          <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider font-mono">
+        {/* Setup Steps */}
+        <div className="space-y-2.5 pt-3 border-t border-[#27272A]">
+          <h3 className="text-xs font-semibold text-[#A1A1AA] uppercase tracking-wider font-mono">
             Configuration Steps in GitHub Repository Settings:
           </h3>
-          <ol className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-slate-300">
-            <li className="p-3 rounded-xl bg-[#080d19] border border-[#18263f]">
-              <span className="font-bold text-sky-400 mr-1.5">1.</span> Open your GitHub repository in your browser.
+          <ol className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-[#D4D4D8]">
+            <li className="p-2.5 rounded-lg bg-[#141519] border border-[#22242A]">
+              <span className="font-semibold text-[#3B82F6] mr-1.5">1.</span> Open your GitHub repository in your browser.
             </li>
-            <li className="p-3 rounded-xl bg-[#080d19] border border-[#18263f]">
-              <span className="font-bold text-sky-400 mr-1.5">2.</span> Navigate to <strong>Settings</strong> → <strong>Webhooks</strong>.
+            <li className="p-2.5 rounded-lg bg-[#141519] border border-[#22242A]">
+              <span className="font-semibold text-[#3B82F6] mr-1.5">2.</span> Navigate to <strong>Settings</strong> → <strong>Webhooks</strong>.
             </li>
-            <li className="p-3 rounded-xl bg-[#080d19] border border-[#18263f]">
-              <span className="font-bold text-sky-400 mr-1.5">3.</span> Click the <strong>Add webhook</strong> button.
+            <li className="p-2.5 rounded-lg bg-[#141519] border border-[#22242A]">
+              <span className="font-semibold text-[#3B82F6] mr-1.5">3.</span> Click the <strong>Add webhook</strong> button.
             </li>
-            <li className="p-3 rounded-xl bg-[#080d19] border border-[#18263f]">
-              <span className="font-bold text-sky-400 mr-1.5">4.</span> Paste the Payload URL copied above into <strong>Payload URL</strong>.
+            <li className="p-2.5 rounded-lg bg-[#141519] border border-[#22242A]">
+              <span className="font-semibold text-[#3B82F6] mr-1.5">4.</span> Paste the Payload URL copied above.
             </li>
-            <li className="p-3 rounded-xl bg-[#080d19] border border-[#18263f]">
-              <span className="font-bold text-sky-400 mr-1.5">5.</span> Set Content type to <code className="text-sky-300">application/json</code>.
+            <li className="p-2.5 rounded-lg bg-[#141519] border border-[#22242A]">
+              <span className="font-semibold text-[#3B82F6] mr-1.5">5.</span> Set Content type to <code className="text-[#3B82F6]">application/json</code>.
             </li>
-            <li className="p-3 rounded-xl bg-[#080d19] border border-[#18263f]">
-              <span className="font-bold text-sky-400 mr-1.5">6.</span> Enter your <code className="text-sky-300">GITHUB_WEBHOOK_SECRET</code> configured in <code className="text-slate-300">.env</code>.
+            <li className="p-2.5 rounded-lg bg-[#141519] border border-[#22242A]">
+              <span className="font-semibold text-[#3B82F6] mr-1.5">6.</span> Enter your <code className="text-[#3B82F6]">GITHUB_WEBHOOK_SECRET</code> from <code className="text-[#A1A1AA]">.env</code>.
             </li>
-            <li className="p-3 rounded-xl bg-[#080d19] border border-[#18263f]">
-              <span className="font-bold text-sky-400 mr-1.5">7.</span> Set SSL verification to <strong>Enable SSL verification</strong>.
+            <li className="p-2.5 rounded-lg bg-[#141519] border border-[#22242A]">
+              <span className="font-semibold text-[#3B82F6] mr-1.5">7.</span> Set SSL verification to <strong>Enable SSL verification</strong>.
             </li>
-            <li className="p-3 rounded-xl bg-[#080d19] border border-[#18263f]">
-              <span className="font-bold text-sky-400 mr-1.5">8.</span> Select <strong>Just the push event</strong> (or individual events matching your trigger).
+            <li className="p-2.5 rounded-lg bg-[#141519] border border-[#22242A]">
+              <span className="font-semibold text-[#3B82F6] mr-1.5">8.</span> Select <strong>Just the push event</strong>.
             </li>
-            <li className="p-3 rounded-xl bg-[#080d19] border border-[#18263f]">
-              <span className="font-bold text-sky-400 mr-1.5">9.</span> Click <strong>Add webhook</strong> to save.
+            <li className="p-2.5 rounded-lg bg-[#141519] border border-[#22242A]">
+              <span className="font-semibold text-[#3B82F6] mr-1.5">9.</span> Click <strong>Add webhook</strong> to save.
             </li>
-            <li className="p-3 rounded-xl bg-[#080d19] border border-[#18263f]">
-              <span className="font-bold text-sky-400 mr-1.5">10.</span> Push a commit to your branch and inspect the execution in this dashboard!
+            <li className="p-2.5 rounded-lg bg-[#141519] border border-[#22242A]">
+              <span className="font-semibold text-[#3B82F6] mr-1.5">10.</span> Push a commit to your branch and inspect the live execution.
             </li>
           </ol>
         </div>
       </Card>
 
       {/* SECTION C — Configuration Readiness Checklist */}
-      <div>
-        <div className="flex items-center gap-2 mb-3">
-          <ShieldCheck className="w-4 h-4 text-emerald-400" />
-          <h2 className="text-sm font-bold uppercase tracking-wider text-slate-200 font-mono">
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <ShieldCheck className="w-4 h-4 text-[#10B981]" />
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-[#A1A1AA]">
             Section C — Configuration Checklist
           </h2>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 text-xs">
           {/* Check 1: Backend */}
-          <div className="p-3.5 rounded-xl bg-[#0a101f] border border-[#1b2b48] flex items-center justify-between">
+          <div className="p-3 rounded-lg bg-[#111317] border border-[#27272A] flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               {readiness.backendOnline ? (
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <CheckCircle2 className="w-4 h-4 text-[#10B981] shrink-0" />
               ) : (
-                <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                <AlertCircle className="w-4 h-4 text-[#EF4444] shrink-0" />
               )}
               <div>
-                <span className="font-bold text-white font-mono">Backend Engine Server</span>
-                <p className="text-[11px] text-slate-400 mt-0.5">Listening on port {readiness.port}</p>
+                <span className="font-semibold text-[#F4F4F5] font-mono">Backend Engine Server</span>
+                <p className="text-[11px] text-[#71717A] mt-0.5">Listening on port {readiness.port}</p>
               </div>
             </div>
-            <span className="text-[11px] font-mono text-emerald-400 font-bold">
+            <span className="text-[11px] font-mono text-[#34D399] font-semibold">
               {readiness.backendOnline ? 'ONLINE' : 'STOPPED'}
             </span>
           </div>
 
           {/* Check 2: Webhook Secret */}
-          <div className="p-3.5 rounded-xl bg-[#0a101f] border border-[#1b2b48] flex items-center justify-between">
+          <div className="p-3 rounded-lg bg-[#111317] border border-[#27272A] flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               {readiness.githubWebhookSecretConfigured ? (
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <CheckCircle2 className="w-4 h-4 text-[#10B981] shrink-0" />
               ) : (
-                <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                <AlertCircle className="w-4 h-4 text-[#F59E0B] shrink-0" />
               )}
               <div>
-                <span className="font-bold text-white font-mono">Webhook HMAC Secret</span>
-                <p className="text-[11px] text-slate-400 mt-0.5">GITHUB_WEBHOOK_SECRET in .env</p>
+                <span className="font-semibold text-[#F4F4F5] font-mono">Webhook HMAC Secret</span>
+                <p className="text-[11px] text-[#71717A] mt-0.5">GITHUB_WEBHOOK_SECRET in .env</p>
               </div>
             </div>
-            <span className={`text-[11px] font-mono font-bold ${readiness.githubWebhookSecretConfigured ? 'text-emerald-400' : 'text-amber-400'}`}>
+            <span className={`text-[11px] font-mono font-semibold ${readiness.githubWebhookSecretConfigured ? 'text-[#34D399]' : 'text-[#FBBF24]'}`}>
               {readiness.githubWebhookSecretConfigured ? 'CONFIGURED' : 'NOT SET'}
             </span>
           </div>
 
           {/* Check 3: GitHub Token */}
-          <div className="p-3.5 rounded-xl bg-[#0a101f] border border-[#1b2b48] flex items-center justify-between">
+          <div className="p-3 rounded-lg bg-[#111317] border border-[#27272A] flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               {readiness.githubTokenConfigured ? (
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <CheckCircle2 className="w-4 h-4 text-[#10B981] shrink-0" />
               ) : (
-                <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                <AlertCircle className="w-4 h-4 text-[#F59E0B] shrink-0" />
               )}
               <div>
-                <span className="font-bold text-white font-mono">GitHub Status Token</span>
-                <p className="text-[11px] text-slate-400 mt-0.5">GITHUB_TOKEN for commit status reports</p>
+                <span className="font-semibold text-[#F4F4F5] font-mono">GitHub Status Token</span>
+                <p className="text-[11px] text-[#71717A] mt-0.5">GITHUB_TOKEN for status reports</p>
               </div>
             </div>
-            <span className={`text-[11px] font-mono font-bold ${readiness.githubTokenConfigured ? 'text-emerald-400' : 'text-amber-400'}`}>
+            <span className={`text-[11px] font-mono font-semibold ${readiness.githubTokenConfigured ? 'text-[#34D399]' : 'text-[#FBBF24]'}`}>
               {readiness.githubTokenConfigured ? 'CONFIGURED' : 'NOT SET'}
             </span>
           </div>
 
           {/* Check 4: Public Webhook Base URL */}
-          <div className="p-3.5 rounded-xl bg-[#0a101f] border border-[#1b2b48] flex items-center justify-between">
+          <div className="p-3 rounded-lg bg-[#111317] border border-[#27272A] flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               {hasPublicUrl ? (
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <CheckCircle2 className="w-4 h-4 text-[#10B981] shrink-0" />
               ) : (
-                <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                <AlertCircle className="w-4 h-4 text-[#F59E0B] shrink-0" />
               )}
               <div>
-                <span className="font-bold text-white font-mono">Public Ingestion Tunnel</span>
-                <p className="text-[11px] text-slate-400 mt-0.5">PUBLIC_WEBHOOK_BASE_URL (ngrok / domain)</p>
+                <span className="font-semibold text-[#F4F4F5] font-mono">Public Ingestion Tunnel</span>
+                <p className="text-[11px] text-[#71717A] mt-0.5">PUBLIC_WEBHOOK_BASE_URL (ngrok / host)</p>
               </div>
             </div>
-            <span className={`text-[11px] font-mono font-bold ${hasPublicUrl ? 'text-emerald-400' : 'text-amber-400'}`}>
+            <span className={`text-[11px] font-mono font-semibold ${hasPublicUrl ? 'text-[#34D399]' : 'text-[#71717A]'}`}>
               {hasPublicUrl ? 'CONFIGURED' : 'OPTIONAL (LOCAL)'}
             </span>
           </div>
@@ -440,14 +435,14 @@ export const IntegrationsPage: React.FC = () => {
       </div>
 
       {/* SECTION D — GitHub Commit Status Explanation & Verification */}
-      <Card variant="surface" className="p-6 rounded-2xl border-[#1b2b48] space-y-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <Card variant="surface" className="p-5 rounded-xl border-[#27272A] space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h2 className="text-sm font-bold uppercase tracking-wider text-white font-mono flex items-center gap-2">
-              <Activity className="w-4 h-4 text-sky-400" />
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-[#F4F4F5] font-mono flex items-center gap-2">
+              <Activity className="w-4 h-4 text-[#3B82F6]" />
               Section D — GitHub Commit Status Reporting
             </h2>
-            <p className="text-xs text-slate-300 mt-1 max-w-2xl leading-relaxed">
+            <p className="text-xs text-[#A1A1AA] mt-1 max-w-2xl leading-relaxed">
               When a push triggers a pipeline, the engine communicates with the GitHub REST API to post commit statuses directly to the commit SHA.
             </p>
           </div>
@@ -466,161 +461,230 @@ export const IntegrationsPage: React.FC = () => {
         {/* Verification Result Banner */}
         {githubVerifyResult && (
           <div
-            className={`p-4 rounded-xl border text-xs font-mono space-y-1 ${
+            className={`p-3 rounded-lg border text-xs font-mono space-y-1 ${
               githubVerifyResult.verified
-                ? 'bg-emerald-950/30 border-emerald-500/30 text-emerald-200'
-                : 'bg-red-950/30 border-red-500/30 text-red-200'
+                ? 'bg-[#0D1F17] border-[#164E35] text-[#34D399]'
+                : 'bg-[#241215] border-[#4C1D24] text-[#F87171]'
             }`}
           >
-            <div className="flex items-center gap-2 font-bold text-sm">
+            <div className="flex items-center gap-2 font-semibold text-xs">
               {githubVerifyResult.verified ? (
                 <>
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  <CheckCircle2 className="w-4 h-4 text-[#10B981]" />
                   <span>GitHub Authentication Verified: {githubVerifyResult.authenticatedUser}</span>
                 </>
               ) : (
                 <>
-                  <AlertCircle className="w-4 h-4 text-red-400" />
+                  <AlertCircle className="w-4 h-4 text-[#EF4444]" />
                   <span>Verification Failed: {githubVerifyResult.reason}</span>
                 </>
               )}
             </div>
             {githubVerifyResult.verified && (
-              <p className="text-[11px] text-emerald-300/80">
+              <p className="text-[11px] text-[#A1A1AA]">
                 Rate limit remaining: {githubVerifyResult.rateLimitRemaining || 'N/A'} • Token scopes: [{githubVerifyResult.scopes?.join(', ') || 'none'}]
               </p>
             )}
           </div>
         )}
 
-        {/* Visual Mockup of GitHub Commit Statuses */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs font-mono">
-          <div className="p-3 rounded-xl bg-[#060a14] border border-amber-500/30 space-y-1">
-            <span className="text-amber-400 font-bold flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+        {/* States Description */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 text-xs font-mono">
+          <div className="p-2.5 rounded-lg bg-[#141519] border border-[#22242A] space-y-1">
+            <span className="text-[#FBBF24] font-semibold flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B]" />
               State: pending
             </span>
-            <p className="text-[11px] text-slate-400">Sent immediately when webhook is received and jobs begin execution.</p>
+            <p className="text-[11px] text-[#71717A]">Sent immediately when webhook is received and jobs begin execution.</p>
           </div>
 
-          <div className="p-3 rounded-xl bg-[#060a14] border border-emerald-500/30 space-y-1">
-            <span className="text-emerald-400 font-bold flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-400" />
+          <div className="p-2.5 rounded-lg bg-[#141519] border border-[#22242A] space-y-1">
+            <span className="text-[#34D399] font-semibold flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#10B981]" />
               State: success
             </span>
-            <p className="text-[11px] text-slate-400">Sent when all pipeline jobs complete with zero non-zero exit codes.</p>
+            <p className="text-[11px] text-[#71717A]">Sent when all pipeline jobs complete with zero exit codes.</p>
           </div>
 
-          <div className="p-3 rounded-xl bg-[#060a14] border border-red-500/30 space-y-1">
-            <span className="text-red-400 font-bold flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-red-400" />
+          <div className="p-2.5 rounded-lg bg-[#141519] border border-[#22242A] space-y-1">
+            <span className="text-[#F87171] font-semibold flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#EF4444]" />
               State: failure
             </span>
-            <p className="text-[11px] text-slate-400">Sent when any step fails or times out during execution.</p>
+            <p className="text-[11px] text-[#71717A]">Sent when any step fails or times out during execution.</p>
           </div>
 
-          <div className="p-3 rounded-xl bg-[#060a14] border border-red-700/30 space-y-1">
-            <span className="text-red-300 font-bold flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-red-700" />
+          <div className="p-2.5 rounded-lg bg-[#141519] border border-[#22242A] space-y-1">
+            <span className="text-[#A1A1AA] font-semibold flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#71717A]" />
               State: error
             </span>
-            <p className="text-[11px] text-slate-400">Sent if an internal engine scheduler exception or crash occurs.</p>
+            <p className="text-[11px] text-[#71717A]">Sent if an internal engine scheduler exception occurs.</p>
           </div>
         </div>
       </Card>
 
       {/* SECTION E — Getting Started Onboarding Sequence */}
-      <div>
-        <div className="flex items-center gap-2 mb-3">
-          <Terminal className="w-4 h-4 text-sky-400" />
-          <h2 className="text-sm font-bold uppercase tracking-wider text-slate-200 font-mono">
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Terminal className="w-4 h-4 text-[#3B82F6]" />
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-[#A1A1AA]">
             Section E — Developer Getting Started Guide
           </h2>
         </div>
 
-        <Card variant="surface" className="p-5 rounded-2xl border-[#1b2b48] space-y-4">
-          <p className="text-xs text-slate-300 leading-relaxed">
-            Quick sequence of verified commands from <code className="text-sky-300">package.json</code> to start and test this engine on any machine:
+        <Card variant="surface" className="p-4 rounded-xl border-[#27272A] space-y-3">
+          <p className="text-xs text-[#A1A1AA] leading-relaxed">
+            Verified commands from <code className="text-[#3B82F6]">package.json</code> to run this engine:
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs font-mono">
-            <div className="p-3 rounded-xl bg-[#060a14] border border-[#17253e] space-y-1.5">
-              <span className="text-sky-400 font-bold">1. Start Backend Engine</span>
-              <code className="block p-2 rounded bg-black text-slate-200 select-all">
+            <div className="p-3 rounded-lg bg-[#141519] border border-[#22242A] space-y-1.5">
+              <span className="text-[#D4D4D8] font-semibold">1. Start Backend Engine</span>
+              <code className="block p-1.5 rounded bg-[#0B0C0E] border border-[#27272A] text-[#F4F4F5] select-all">
                 npm run dev
               </code>
-              <span className="text-[10px] text-slate-500 block">Runs server on port 3000 with watcher</span>
+              <span className="text-[10px] text-[#71717A] block">Express server on port 3000 with watcher</span>
             </div>
 
-            <div className="p-3 rounded-xl bg-[#060a14] border border-[#17253e] space-y-1.5">
-              <span className="text-sky-400 font-bold">2. Start Dashboard</span>
-              <code className="block p-2 rounded bg-black text-slate-200 select-all">
+            <div className="p-3 rounded-lg bg-[#141519] border border-[#22242A] space-y-1.5">
+              <span className="text-[#D4D4D8] font-semibold">2. Start Dashboard</span>
+              <code className="block p-1.5 rounded bg-[#0B0C0E] border border-[#27272A] text-[#F4F4F5] select-all">
                 npm run dashboard:dev
               </code>
-              <span className="text-[10px] text-slate-500 block">Vite UI dev server on http://localhost:5174</span>
+              <span className="text-[10px] text-[#71717A] block">Vite UI dev server on http://localhost:5174</span>
             </div>
 
-            <div className="p-3 rounded-xl bg-[#060a14] border border-[#17253e] space-y-1.5">
-              <span className="text-sky-400 font-bold">3. Start Ngrok Tunnel</span>
-              <code className="block p-2 rounded bg-black text-slate-200 select-all">
+            <div className="p-3 rounded-lg bg-[#141519] border border-[#22242A] space-y-1.5">
+              <span className="text-[#D4D4D8] font-semibold">3. Start Ngrok Tunnel</span>
+              <code className="block p-1.5 rounded bg-[#0B0C0E] border border-[#27272A] text-[#F4F4F5] select-all">
                 npm run tunnel
               </code>
-              <span className="text-[10px] text-slate-500 block">Exposes port 3000 publicly for GitHub webhooks</span>
+              <span className="text-[10px] text-[#71717A] block">Exposes port 3000 publicly for GitHub webhooks</span>
             </div>
           </div>
         </Card>
       </div>
 
-      {/* SECTION F — Recent Webhook Deliveries (Live Metadata) */}
-      <div>
-        <div className="flex items-center gap-2 mb-3">
-          <Network className="w-4 h-4 text-sky-400" />
-          <h2 className="text-sm font-bold uppercase tracking-wider text-slate-200 font-mono">
+      {/* SECTION F — Recent Webhook Deliveries */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Network className="w-4 h-4 text-[#3B82F6]" />
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-[#A1A1AA]">
             Section F — Recent Webhook Deliveries ({readiness.recentDeliveries.length})
           </h2>
         </div>
 
-        <Card variant="surface" className="overflow-hidden border-[#1b2b48]">
+        <Card variant="surface" noPadding className="border border-[#27272A]">
           {readiness.recentDeliveries.length === 0 ? (
-            <div className="p-8 text-center text-xs text-slate-500 font-mono">
+            <div className="p-8 text-center text-xs text-[#71717A] font-mono">
               No webhook deliveries recorded since server startup. Push to your repository to see deliveries appear in real time.
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs font-mono">
-                <thead className="bg-[#0b1324] text-slate-400 border-b border-[#1b2b48]">
+                <thead className="bg-[#141519] text-[#71717A] border-b border-[#27272A]">
                   <tr>
-                    <th className="p-3">Delivery ID</th>
-                    <th className="p-3">Workflow</th>
-                    <th className="p-3">Repository</th>
-                    <th className="p-3">Branch / Commit</th>
-                    <th className="p-3">Timestamp</th>
-                    <th className="p-3 text-right">Status</th>
+                    <th className="py-2.5 px-3">Delivery &amp; Time</th>
+                    <th className="py-2.5 px-3">Workflow / Event</th>
+                    <th className="py-2.5 px-3">Repository &amp; Commit</th>
+                    <th className="py-2.5 px-3">Branch</th>
+                    <th className="py-2.5 px-3">Validation Outcome</th>
+                    <th className="py-2.5 px-3">Pipeline Run</th>
+                    <th className="py-2.5 px-3 text-right">GitHub Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#132038]">
+                <tbody className="divide-y divide-[#1E2026]">
                   {readiness.recentDeliveries.map((del) => (
-                    <tr key={del.id} className="hover:bg-[#0c162a] text-slate-300">
-                      <td className="p-3 text-sky-400 font-bold truncate max-w-[140px]" title={del.id}>
-                        {del.id}
+                    <tr key={del.id} className="hover:bg-[#16181F] text-[#D4D4D8] transition-colors">
+                      <td className="py-2.5 px-3">
+                        <div className="text-[#3B82F6] font-semibold truncate max-w-[130px]" title={del.id}>
+                          {del.id}
+                        </div>
+                        <div className="text-[10px] text-[#71717A] mt-0.5">
+                          {new Date(del.timestamp).toLocaleTimeString()}
+                        </div>
                       </td>
-                      <td className="p-3 font-semibold text-white">{del.workflowName}</td>
-                      <td className="p-3 text-slate-400">{del.repository}</td>
-                      <td className="p-3">
-                        <span className="text-slate-200">{del.branch}</span>
-                        <span className="text-slate-500"> @ {del.commitSha.slice(0, 7)}</span>
+                      <td className="py-2.5 px-3">
+                        <div className="font-medium text-[#F4F4F5]">{del.workflowName}</div>
+                        <div className="text-[10px] text-[#71717A] uppercase">{del.event}</div>
                       </td>
-                      <td className="p-3 text-slate-500">{new Date(del.timestamp).toLocaleTimeString()}</td>
-                      <td className="p-3 text-right">
+                      <td className="py-2.5 px-3">
+                        <div className="text-[#D4D4D8]">{del.repository}</div>
+                        <div className="flex items-center gap-1 text-[11px] text-[#71717A] mt-0.5">
+                          <span>{del.commitSha.slice(0, 7)}</span>
+                          {del.repository && (
+                            <a
+                              href={`https://github.com/${del.repository}/commit/${del.commitSha}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[#3B82F6] hover:text-[#60A5FA]"
+                              title="Open commit on GitHub"
+                            >
+                              <ExternalLink className="w-2.5 h-2.5" />
+                            </a>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-2.5 px-3">
+                        <span className="px-1.5 py-0.5 rounded bg-[#141519] border border-[#27272A] text-[#D4D4D8]">
+                          {del.branch}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3 max-w-[220px]">
                         <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium border ${
                             del.status === 'accepted'
-                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
-                              : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
+                              ? 'bg-[#0D1F17] text-[#34D399] border-[#164E35]'
+                              : del.status === 'skipped'
+                              ? 'bg-[#241A0E] text-[#FBBF24] border-[#4C3415]'
+                              : 'bg-[#241215] text-[#F87171] border-[#4C1D24]'
                           }`}
                         >
-                          {del.status.toUpperCase()}
+                          {del.validationOutcome || del.status.toUpperCase()}
                         </span>
+                        {del.outcomeReason && (
+                          <div className="text-[10px] text-[#71717A] mt-1 truncate" title={del.outcomeReason}>
+                            {del.outcomeReason}
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-3">
+                        {del.runId ? (
+                          <button
+                            onClick={() => navigate(`/runs/${del.runId}`)}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#16181D] hover:bg-[#20222A] text-[#3B82F6] hover:text-[#60A5FA] border border-[#27272A] font-medium text-xs transition-colors"
+                            title={`Jump to run ${del.runId}`}
+                          >
+                            <span>{del.runId.slice(0, 8)}...</span>
+                            <ArrowRight className="w-3 h-3" />
+                          </button>
+                        ) : (
+                          <span className="text-[#52525B] text-xs italic">No run</span>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-3 text-right">
+                        {del.commitStatus ? (
+                          <div>
+                            <span
+                              className={`px-1.5 py-0.5 rounded text-[10px] font-medium border ${
+                                del.commitStatus.state === 'success'
+                                  ? 'bg-[#0D1F17] text-[#34D399] border-[#164E35]'
+                                  : del.commitStatus.state === 'pending'
+                                  ? 'bg-[#0E1B2E] text-[#60A5FA] border-[#1D3557]'
+                                  : del.commitStatus.state === 'failure'
+                                  ? 'bg-[#241215] text-[#F87171] border-[#4C1D24]'
+                                  : 'bg-[#18191E] text-[#A1A1AA] border-[#27272A]'
+                              }`}
+                              title={del.commitStatus.description}
+                            >
+                              {del.commitStatus.state.toUpperCase()}
+                            </span>
+                            <div className="text-[9px] text-[#71717A] mt-0.5">{del.commitStatus.context}</div>
+                          </div>
+                        ) : (
+                          <span className="text-[#52525B] text-[10px]">Unavailable</span>
+                        )}
                       </td>
                     </tr>
                   ))}

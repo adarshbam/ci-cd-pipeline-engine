@@ -8,7 +8,7 @@ import {
   Metrics,
   Environment,
   RecentEvent,
-  JobStatus
+  Artifact
 } from '../types';
 import { WorkflowHeader } from '../components/pipeline/WorkflowHeader';
 import { ReactFlowDag } from '../components/pipeline/ReactFlowDag';
@@ -25,10 +25,7 @@ import {
   Package,
   Layers,
   AlertTriangle,
-  Play,
-  RotateCw,
-  Ban,
-  CheckCircle2
+  RotateCw
 } from 'lucide-react';
 
 export const WorkflowDetailPage: React.FC = () => {
@@ -36,12 +33,15 @@ export const WorkflowDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  const { dataMode, isRealMode, isDemoMode } = useDataMode();
+  const { dataMode, isDemoMode } = useDataMode();
   const [loading, setLoading] = useState(true);
   const [run, setRun] = useState<PipelineRun | null>(null);
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [environments, setEnvironments] = useState<Environment[]>([]);
   const [events, setEvents] = useState<RecentEvent[]>([]);
+  const [artifacts, setArtifacts] = useState<Artifact[]>([]);
+  const [downloadingArtifactId, setDownloadingArtifactId] = useState<string | null>(null);
+  const [artifactError, setArtifactError] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState('overview');
   const [viewMode, setViewMode] = useState<'graph' | 'list'>('graph');
@@ -73,22 +73,32 @@ export const WorkflowDetailPage: React.FC = () => {
     async function loadData() {
       setLoading(true);
       try {
+        const isPreview = searchParams.get('preview') === 'true';
         const [runData, metricsData, envsData, eventsData] = await Promise.all([
-          pipelineApi.getRunById(id, dataMode),
+          pipelineApi.getRunById(id, dataMode, isPreview),
           pipelineApi.getMetrics(dataMode),
-          pipelineApi.getEnvironments(),
-          pipelineApi.getRecentEvents(),
+          pipelineApi.getEnvironments(dataMode),
+          pipelineApi.getRecentEvents(dataMode),
         ]);
         setRun(runData);
         setMetrics(metricsData);
         setEnvironments(envsData);
         setEvents(eventsData);
+
+        if (runData && runData.id) {
+          try {
+            const artData = await pipelineApi.getRunArtifacts(runData.id, dataMode);
+            setArtifacts(artData);
+          } catch {
+            // fallback
+          }
+        }
       } finally {
         setLoading(false);
       }
     }
     loadData();
-  }, [id, dataMode]);
+  }, [id, dataMode, searchParams]);
 
   // Polling for active running state
   useEffect(() => {
@@ -166,15 +176,33 @@ export const WorkflowDetailPage: React.FC = () => {
     }
   };
 
+  const handleDownloadArtifact = async (art: Artifact) => {
+    if (!run) return;
+    setDownloadingArtifactId(art.id);
+    setArtifactError(null);
+    try {
+      await pipelineApi.downloadArtifact(
+        art.runId || run.id,
+        art.jobId || art.jobName,
+        art.name
+      );
+    } catch (err: any) {
+      console.error('Download error:', err);
+      setArtifactError(err?.message || 'Failed to download artifact file');
+    } finally {
+      setDownloadingArtifactId(null);
+    }
+  };
+
   if (loading || !run || !metrics) {
     return (
       <div className="space-y-6">
-        <Skeleton className="h-24 w-full rounded-2xl" />
-        <Skeleton className="h-[400px] w-full rounded-2xl" />
+        <Skeleton className="h-24 w-full rounded-xl" />
+        <Skeleton className="h-[380px] w-full rounded-xl" />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          <Skeleton className="h-72 w-full rounded-2xl" />
-          <Skeleton className="h-72 w-full rounded-2xl" />
-          <Skeleton className="h-72 w-full rounded-2xl" />
+          <Skeleton className="h-64 w-full rounded-xl" />
+          <Skeleton className="h-64 w-full rounded-xl" />
+          <Skeleton className="h-64 w-full rounded-xl" />
         </div>
       </div>
     );
@@ -182,7 +210,7 @@ export const WorkflowDetailPage: React.FC = () => {
 
   return (
     <div className="space-y-6 select-text">
-      {/* 1. Header Area with workflow title, branch, commit SHA, elapsed time, started timestamp, status */}
+      {/* 1. Header Area */}
       <WorkflowHeader
         run={run}
         activeTab={activeTab}
@@ -191,30 +219,79 @@ export const WorkflowDetailPage: React.FC = () => {
         onPause={handlePauseAttempt}
         onCancel={() => setIsCancelModalOpen(true)}
         isActionLoading={isActionLoading}
+        artifactCount={artifacts.length}
       />
 
       {/* Action Notification Banner */}
       {actionNotice && (
-        <div className="flex items-center justify-between px-4 py-2.5 rounded-xl bg-[#111e38] border border-sky-500/40 text-xs text-sky-200 shadow-lg">
+        <div className="flex items-center justify-between px-3.5 py-2 rounded-lg bg-[#141519] border border-[#27272A] text-xs text-[#D4D4D8]">
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-sky-400 animate-pulse" />
+            <span className="w-1.5 h-1.5 rounded-full bg-[#3B82F6]" />
             <span>{actionNotice}</span>
           </div>
           <button
             onClick={() => setActionNotice(null)}
-            className="text-slate-400 hover:text-white"
+            className="text-[#71717A] hover:text-[#F4F4F5]"
           >
             ✕
           </button>
         </div>
       )}
 
+      {/* Workflow Topology Preview vs Run Execution Switcher */}
+      <div className="flex flex-wrap items-center justify-between gap-3 px-3.5 py-2 rounded-lg bg-[#141519] border border-[#27272A] text-xs">
+        <div className="flex items-center gap-2">
+          {run.isIdlePreview ? (
+            <>
+              <span className="w-1.5 h-1.5 rounded-full bg-[#3B82F6]" />
+              <span className="text-[#A1A1AA]">
+                Workflow Definition Preview (All jobs idle) — Inspect declared DAG topology & dependencies
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="w-1.5 h-1.5 rounded-full bg-[#10B981]" />
+              <span className="text-[#A1A1AA]">
+                Pipeline Run Execution: <code className="text-[#F4F4F5] font-bold">{run.id}</code> ({run.status.toUpperCase()})
+              </span>
+            </>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {run.isIdlePreview ? (
+            <button
+              onClick={() => {
+                const next = new URLSearchParams(searchParams);
+                next.delete('preview');
+                navigate(`?${next.toString()}`);
+              }}
+              className="px-2.5 py-1 rounded bg-[#18191E] hover:bg-[#20222A] text-[#3B82F6] border border-[#27272A] font-medium transition-colors flex items-center gap-1.5 text-xs"
+            >
+              <RotateCw className="w-3 h-3" />
+              <span>View Latest Run</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                const next = new URLSearchParams(searchParams);
+                next.set('preview', 'true');
+                navigate(`?${next.toString()}`);
+              }}
+              className="px-2.5 py-1 rounded bg-[#18191E] hover:bg-[#20222A] text-[#D4D4D8] border border-[#27272A] font-medium transition-colors flex items-center gap-1.5 text-xs"
+            >
+              <Layers className="w-3 h-3 text-[#A1A1AA]" />
+              <span>Preview Definition DAG</span>
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* 2. TAB CONTENT */}
 
-      {/* Tab 1: Overview (Hero page matching reference screenshot) */}
+      {/* Tab 1: Overview */}
       {activeTab === 'overview' && (
         <div className="space-y-6">
-          {/* Main Graph Section (React Flow DAG Centerpiece) */}
+          {/* Main Graph Section (React Flow DAG Centerpiece — PROTECTED) */}
           {viewMode === 'graph' ? (
             <ReactFlowDag
               jobs={run.jobs}
@@ -224,12 +301,14 @@ export const WorkflowDetailPage: React.FC = () => {
               onToggleViewMode={(mode: 'graph' | 'list') => setViewMode(mode)}
             />
           ) : (
-            <div className="p-6 rounded-2xl bg-[#090f1e] border border-[#192742]">
-              <div className="flex justify-between items-center mb-4">
-                <h4 className="text-sm font-semibold text-slate-100">Jobs Sequential List</h4>
+            <div className="p-5 rounded-xl bg-[#111317] border border-[#27272A]">
+              <div className="flex justify-between items-center mb-3">
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-[#A1A1AA]">
+                  Jobs Sequential List
+                </h4>
                 <button
                   onClick={() => setViewMode('graph')}
-                  className="text-xs text-sky-400 hover:underline"
+                  className="text-xs text-[#3B82F6] hover:underline"
                 >
                   Switch back to Graph view
                 </button>
@@ -244,7 +323,7 @@ export const WorkflowDetailPage: React.FC = () => {
 
           {/* 3. Below Graph 3-Column Layout */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-            {/* Left side: Jobs table (columns: #, Job, Status, Duration, Started, Actions) */}
+            {/* Left: Jobs table */}
             <div className="lg:col-span-1">
               <JobsTable
                 jobs={run.jobs}
@@ -253,7 +332,7 @@ export const WorkflowDetailPage: React.FC = () => {
               />
             </div>
 
-            {/* Right side - Middle: Run Summary cards & Environments */}
+            {/* Middle: Run Summary */}
             <div className="lg:col-span-1">
               <RunSummaryCard
                 metrics={metrics}
@@ -262,7 +341,7 @@ export const WorkflowDetailPage: React.FC = () => {
               />
             </div>
 
-            {/* Right side - Right: Recent Events timeline */}
+            {/* Right: Recent Events timeline */}
             <div className="lg:col-span-1">
               <RecentEventsCard
                 events={events}
@@ -275,34 +354,36 @@ export const WorkflowDetailPage: React.FC = () => {
 
       {/* Tab 2: Logs Tab */}
       {activeTab === 'logs' && (
-        <Card variant="surface" className="p-6">
-          <div className="flex items-center justify-between mb-4 pb-3 border-b border-[#1b2b48]">
+        <Card variant="surface" className="p-5">
+          <div className="flex items-center justify-between mb-3.5 pb-2.5 border-b border-[#27272A]">
             <div className="flex items-center gap-2">
-              <Terminal className="w-5 h-5 text-sky-400" />
-              <h3 className="text-sm font-bold text-slate-100">Consolidated Engine Execution Logs</h3>
+              <Terminal className="w-4 h-4 text-[#3B82F6]" />
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-[#A1A1AA]">
+                Consolidated Engine Execution Logs
+              </h3>
             </div>
-            <span className="text-xs font-mono text-emerald-400 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-xs font-mono text-[#34D399] flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#10B981]" />
               Connected (Local Engine)
             </span>
           </div>
-          <div className="rounded-xl bg-[#050811] border border-[#18263f] p-4 font-mono text-xs text-slate-300 leading-relaxed max-h-[500px] overflow-y-auto space-y-1">
-            <div className="text-slate-500">--- Pipeline {run.workflowName} execution log ---</div>
-            <div className="text-sky-400">[10:24:01] [SETUP] Worker workspace created in OS temporary directory</div>
-            <div className="text-slate-300">[10:24:04] [CHECKOUT] Triggered via push event for branch {run.branch}</div>
-            <div className="text-emerald-400">[10:26:14] [BUILD] ✓ Build steps executed with exit code 0</div>
-            <div className="text-emerald-400">[10:27:12] [LINT] ✓ Code style verification passed</div>
-            <div className="text-emerald-400">[10:30:31] [TEST] ✓ Unit & integration tests settled</div>
+          <div className="rounded-lg bg-[#0B0C0E] border border-[#27272A] p-3.5 font-mono text-xs text-[#D4D4D8] leading-relaxed max-h-[500px] overflow-y-auto space-y-1">
+            <div className="text-[#71717A]">--- Pipeline {run.workflowName} execution log ---</div>
+            <div className="text-[#60A5FA]">[10:24:01] [SETUP] Worker workspace created in OS temporary directory</div>
+            <div className="text-[#A1A1AA]">[10:24:04] [CHECKOUT] Triggered via push event for branch {run.branch}</div>
+            <div className="text-[#34D399]">[10:26:14] [BUILD] ✓ Build steps executed with exit code 0</div>
+            <div className="text-[#34D399]">[10:27:12] [LINT] ✓ Code style verification passed</div>
+            <div className="text-[#34D399]">[10:30:31] [TEST] ✓ Unit & integration tests settled</div>
             {run.status === 'cancelled' ? (
-              <div className="text-amber-400 font-semibold">
+              <div className="text-[#FBBF24] font-medium">
                 [10:32:00] [CANCEL] Pipeline was cancelled by user. Terminated child process trees.
               </div>
             ) : run.status === 'failed' ? (
-              <div className="text-red-400 font-semibold">
+              <div className="text-[#F87171] font-medium">
                 [10:32:45] [ERROR] Job failed with exit code 1
               </div>
             ) : (
-              <div className="text-sky-400 font-semibold">
+              <div className="text-[#60A5FA] font-medium">
                 [10:32:45] [STATUS] Pipeline state: {run.status.toUpperCase()}
               </div>
             )}
@@ -312,73 +393,134 @@ export const WorkflowDetailPage: React.FC = () => {
 
       {/* Tab 3: Artifacts Tab */}
       {activeTab === 'artifacts' && (
-        <Card variant="surface" className="p-6">
-          <div className="flex items-center justify-between mb-4">
+        <Card variant="surface" className="p-5">
+          <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <Package className="w-5 h-5 text-sky-400" />
-              <h3 className="text-sm font-bold text-slate-100">Pipeline Artifacts</h3>
+              <Package className="w-4 h-4 text-[#3B82F6]" />
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-[#A1A1AA]">
+                Pipeline Artifacts ({artifacts.length})
+              </h3>
             </div>
             <button
               onClick={() => navigate('/artifacts')}
-              className="text-xs text-sky-400 hover:underline"
+              className="text-xs text-[#3B82F6] hover:underline"
             >
               Browse all artifacts →
             </button>
           </div>
-          <p className="text-xs text-slate-400 mb-4">
+          <p className="text-xs text-[#71717A] mb-3.5">
             Artifacts generated by this workflow run. Managed locally in workspace runtime and persisted.
           </p>
-          <div className="space-y-3">
-            {[
-              { name: 'release-bundle.tar.gz', size: '14.2 MB', job: 'build', sha256: '9f83ac24...' },
-              { name: 'test-coverage-report.html', size: '2.1 MB', job: 'test', sha256: '88bc310a...' },
-              { name: 'dist-manifest.json', size: '4.8 KB', job: 'package', sha256: 'a12ef901...' },
-            ].map((art, i) => (
-              <div
-                key={i}
-                className="p-3.5 rounded-xl bg-[#0c1426] border border-[#1a2844] flex items-center justify-between"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-sky-950/60 border border-sky-500/30 flex items-center justify-center text-sky-400 font-mono text-xs">
-                    ZIP
-                  </div>
-                  <div>
-                    <h5 className="text-xs font-semibold text-slate-200">{art.name}</h5>
-                    <span className="text-[10px] text-slate-500 font-mono">
-                      {art.size} • Produced by {art.job}
-                    </span>
-                  </div>
-                </div>
-                <Button variant="ghost" size="xs">
-                  Download
-                </Button>
+
+          {artifactError && (
+            <div className="mb-3.5 p-3 rounded-lg bg-[#241215] border border-[#4C1D24] text-xs text-[#F87171] flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span>{artifactError}</span>
               </div>
-            ))}
-          </div>
+              <button
+                onClick={() => setArtifactError(null)}
+                className="text-[#71717A] hover:text-[#F4F4F5] font-bold px-1"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
+          {artifacts.length === 0 ? (
+            <div className="p-8 rounded-lg bg-[#141519] border border-[#22242A] text-center space-y-2">
+              <Package className="w-8 h-8 text-[#52525B] mx-auto opacity-60" />
+              <h4 className="text-xs font-semibold text-[#F4F4F5] font-mono">
+                No artifacts produced by this run
+              </h4>
+              <p className="text-[11px] text-[#71717A] max-w-md mx-auto leading-relaxed">
+                This workflow run did not upload any persistent output files. To produce downloadable artifacts, declare an <code className="text-[#3B82F6] font-mono">artifacts.upload</code> block in your workflow definition.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {artifacts.map((art) => {
+                const isDownloading = downloadingArtifactId === art.id;
+                const fileTypeBadge =
+                  art.type === 'tar'
+                    ? 'TAR'
+                    : art.type === 'zip'
+                    ? 'ZIP'
+                    : art.type === 'report'
+                    ? 'DOC'
+                    : art.type === 'directory'
+                    ? 'DIR'
+                    : 'BIN';
+
+                return (
+                  <div
+                    key={art.id}
+                    className="p-3.5 rounded-lg bg-[#141519] border border-[#22242A] flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-8 h-8 rounded-md bg-[#18191E] border border-[#27272A] flex items-center justify-center text-[#3B82F6] font-mono text-[10px] font-bold shrink-0">
+                        {fileTypeBadge}
+                      </div>
+                      <div className="min-w-0">
+                        <h5 className="text-xs font-medium text-[#F4F4F5] font-mono truncate">
+                          {art.name}
+                        </h5>
+                        <div className="flex flex-wrap items-center gap-2 mt-0.5 text-[10px] text-[#71717A] font-mono">
+                          <span>{art.size}</span>
+                          <span>•</span>
+                          <span>Produced by {art.jobName || art.jobId}</span>
+                          {art.sha256 && (
+                            <>
+                              <span>•</span>
+                              <span className="text-[#52525B]" title={`SHA256: ${art.sha256}`}>
+                                SHA: {art.sha256.slice(0, 10)}...
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <Button
+                      variant="secondary"
+                      size="xs"
+                      isLoading={isDownloading}
+                      onClick={() => handleDownloadArtifact(art)}
+                      className="shrink-0 self-end sm:self-auto"
+                    >
+                      Download
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </Card>
       )}
 
       {/* Tab 4: Environments */}
       {activeTab === 'environments' && (
-        <Card variant="surface" className="p-6">
-          <h3 className="text-sm font-bold text-slate-100 mb-4">Target Environments</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card variant="surface" className="p-5">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-[#A1A1AA] mb-3">
+            Target Environments
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
             {environments.map((env) => (
               <div
                 key={env.id}
-                className="p-4 rounded-xl bg-[#0c1426] border border-[#1a2844] space-y-2"
+                className="p-3.5 rounded-lg bg-[#141519] border border-[#22242A] space-y-1.5"
               >
                 <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-bold text-slate-200">{env.name}</h4>
-                  <span className="text-[10px] text-emerald-400 px-2 py-0.5 rounded-full bg-emerald-950/60 border border-emerald-800/40 font-mono">
+                  <h4 className="text-xs font-semibold text-[#F4F4F5]">{env.name}</h4>
+                  <span className="text-[10px] text-[#34D399] px-1.5 py-0.5 rounded bg-[#0D1F17] border border-[#164E35] font-mono">
                     {env.status}
                   </span>
                 </div>
-                <div className="text-xs text-slate-400 font-mono">
-                  Branch: <span className="text-slate-200">{env.targetBranch || 'main'}</span>
+                <div className="text-xs text-[#71717A] font-mono">
+                  Branch: <span className="text-[#D4D4D8]">{env.targetBranch || 'main'}</span>
                 </div>
-                <div className="text-xs text-slate-400 font-mono">
-                  Health Check: <span className="text-emerald-400">{env.healthScore || 100}%</span>
+                <div className="text-xs text-[#71717A] font-mono">
+                  Health Check: <span className="text-[#10B981]">{env.healthScore || 100}%</span>
                 </div>
               </div>
             ))}
@@ -388,25 +530,27 @@ export const WorkflowDetailPage: React.FC = () => {
 
       {/* Tab 5: Settings */}
       {activeTab === 'settings' && (
-        <Card variant="surface" className="p-6 space-y-4">
-          <h3 className="text-sm font-bold text-slate-100">Workflow Settings & Webhook Configuration</h3>
-          <div className="space-y-3 text-xs text-slate-400">
+        <Card variant="surface" className="p-5 space-y-3.5">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-[#A1A1AA]">
+            Workflow Settings &amp; Webhook Configuration
+          </h3>
+          <div className="space-y-3 text-xs text-[#A1A1AA]">
             <div>
-              <label className="block text-slate-300 font-medium mb-1">Webhook Endpoint URL</label>
+              <label className="block text-[#D4D4D8] font-medium mb-1">Webhook Endpoint URL</label>
               <input
                 type="text"
                 readOnly
                 value={`http://localhost:3000/github/ci-cd`}
-                className="w-full bg-[#0a1122] border border-[#1b2b48] rounded-lg px-3 py-2 text-slate-200 font-mono text-xs"
+                className="w-full bg-[#0B0C0E] border border-[#27272A] rounded-md px-3 py-1.5 text-[#F4F4F5] font-mono text-xs focus:outline-none"
               />
             </div>
             <div>
-              <label className="block text-slate-300 font-medium mb-1">Trigger Events</label>
+              <label className="block text-[#D4D4D8] font-medium mb-1">Trigger Events</label>
               <div className="flex gap-2">
-                <span className="px-2.5 py-1 rounded bg-[#0f1b34] text-sky-400 border border-sky-800/40 font-mono text-[11px]">
+                <span className="px-2 py-0.5 rounded bg-[#16181D] text-[#3B82F6] border border-[#27272A] font-mono text-[11px]">
                   push
                 </span>
-                <span className="px-2.5 py-1 rounded bg-[#0f1b34] text-sky-400 border border-sky-800/40 font-mono text-[11px]">
+                <span className="px-2 py-0.5 rounded bg-[#16181D] text-[#3B82F6] border border-[#27272A] font-mono text-[11px]">
                   pull_request
                 </span>
               </div>
@@ -425,15 +569,15 @@ export const WorkflowDetailPage: React.FC = () => {
         onConfirm={handleRerun}
         isConfirmLoading={isActionLoading}
       >
-        <p className="text-xs text-slate-300 leading-relaxed">
+        <p className="text-xs text-[#D4D4D8] leading-relaxed">
           Are you sure you want to trigger a rerun for workflow{' '}
           <strong className="text-white font-mono">{run.workflowName}</strong> on commit{' '}
-          <span className="font-mono text-sky-400">{run.commitSha}</span>?
+          <span className="font-mono text-[#3B82F6]">{run.commitSha}</span>?
           All dependency stages will re-execute in clean workspaces.
         </p>
       </Modal>
 
-      {/* Confirmation Modal for Cancel Run (Phase 3 Requirement) */}
+      {/* Confirmation Modal for Cancel Run */}
       <Modal
         isOpen={isCancelModalOpen}
         onClose={() => setIsCancelModalOpen(false)}
@@ -445,29 +589,29 @@ export const WorkflowDetailPage: React.FC = () => {
         isConfirmLoading={isActionLoading}
       >
         <div className="space-y-3">
-          <p className="text-xs text-slate-300 leading-relaxed">
+          <p className="text-xs text-[#D4D4D8] leading-relaxed">
             Are you sure you want to cancel pipeline run{' '}
             <strong className="text-white font-mono">{run.id}</strong>?
           </p>
-          <div className="p-3 rounded-xl bg-red-950/30 border border-red-900/40 text-xs text-red-300 space-y-1">
+          <div className="p-3 rounded-lg bg-[#241215] border border-[#4C1D24] text-xs text-[#F87171] space-y-1">
             <div className="font-semibold flex items-center gap-1.5">
-              <AlertTriangle className="w-3.5 h-3.5 text-red-400" /> Immediate Backend Actions:
+              <AlertTriangle className="w-3.5 h-3.5 text-[#EF4444]" /> Immediate Backend Actions:
             </div>
-            <ul className="list-disc list-inside text-[11px] text-red-300/90 space-y-0.5">
-              <li>All active child process trees will be terminated via taskkill/SIGKILL</li>
+            <ul className="list-disc list-inside text-[11px] text-[#F87171]/90 space-y-0.5">
+              <li>All active child process trees will be terminated</li>
               <li>Queued jobs will be marked as CANCELLED</li>
-              <li>Workspace directories will be released and cleaned up</li>
+              <li>Workspace directories will be released</li>
             </ul>
           </div>
         </div>
       </Modal>
 
-      {/* Real Job Inspector Drawer (Phase 2 Requirement) */}
+      {/* Job Inspector Drawer */}
       <JobDetailDrawer
         job={selectedJob}
         isOpen={isDrawerOpen}
         onClose={() => setIsDrawerOpen(false)}
-        onRerunJob={(jobId) => {
+        onRerunJob={() => {
           handleRerun();
         }}
       />

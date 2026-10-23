@@ -1,4 +1,5 @@
 import type {
+  CommitStatusInfo,
   Environment,
   JobRun,
   PipelineRun,
@@ -19,6 +20,10 @@ export default class RunPipeline implements PipelineRun {
   finishedAt?: Date;
   branch?: string;
   environment?: Environment;
+  commitSha?: string;
+  repository?: string;
+  deliveryId?: string;
+  commitStatus?: CommitStatusInfo;
 
   constructor(workflow: Workflow, branch?: string, environment?: Environment) {
     this.id = randomUUID();
@@ -107,6 +112,10 @@ export default class RunPipeline implements PipelineRun {
       run.finishedAt = new Date(stored.finishedAt);
     }
     run.jobs = stored.jobs || {};
+    run.commitSha = stored.commitSha;
+    run.repository = stored.repository;
+    run.deliveryId = stored.deliveryId;
+    run.commitStatus = stored.commitStatus;
     return run;
   }
 }

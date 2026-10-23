@@ -43,26 +43,26 @@ export const Modal: React.FC<ModalProps> = ({
     switch (type) {
       case 'danger':
         return (
-          <div className="w-10 h-10 rounded-full bg-red-950/80 border border-red-500/30 flex items-center justify-center text-red-400 shrink-0">
-            <AlertTriangle className="w-5 h-5" />
+          <div className="w-8 h-8 rounded-lg bg-[#241215] border border-[#4C1D24] flex items-center justify-center text-[#F87171] shrink-0">
+            <AlertTriangle className="w-4 h-4" />
           </div>
         );
       case 'warning':
         return (
-          <div className="w-10 h-10 rounded-full bg-amber-950/80 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
-            <AlertTriangle className="w-5 h-5" />
+          <div className="w-8 h-8 rounded-lg bg-[#241A0E] border border-[#4C3415] flex items-center justify-center text-[#FBBF24] shrink-0">
+            <AlertTriangle className="w-4 h-4" />
           </div>
         );
       case 'success':
         return (
-          <div className="w-10 h-10 rounded-full bg-emerald-950/80 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
-            <CheckCircle2 className="w-5 h-5" />
+          <div className="w-8 h-8 rounded-lg bg-[#0D1F17] border border-[#164E35] flex items-center justify-center text-[#34D399] shrink-0">
+            <CheckCircle2 className="w-4 h-4" />
           </div>
         );
       default:
         return (
-          <div className="w-10 h-10 rounded-full bg-sky-950/80 border border-sky-500/30 flex items-center justify-center text-sky-400 shrink-0">
-            <Info className="w-5 h-5" />
+          <div className="w-8 h-8 rounded-lg bg-[#181A20] border border-[#27272A] flex items-center justify-center text-[#3B82F6] shrink-0">
+            <Info className="w-4 h-4" />
           </div>
         );
     }
@@ -72,33 +72,33 @@ export const Modal: React.FC<ModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/80 backdrop-blur-sm transition-opacity"
+        className="fixed inset-0 bg-black/75 transition-opacity"
         onClick={onClose}
       />
 
       {/* Modal Dialog */}
-      <div className="relative w-full max-w-lg rounded-2xl bg-[#0b1220] border border-[#1b2a4a] shadow-2xl overflow-hidden p-6 text-left">
+      <div className="relative w-full max-w-lg rounded-xl bg-[#111317] border border-[#27272A] shadow-2xl overflow-hidden p-6 text-left">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-start gap-3.5">
             {getTypeIcon()}
             <div>
-              <h3 className="text-base font-semibold text-slate-100">{title}</h3>
+              <h3 className="text-sm font-semibold text-[#F4F4F5]">{title}</h3>
               {description && (
-                <p className="text-xs text-slate-400 mt-1 leading-relaxed">{description}</p>
+                <p className="text-xs text-[#A1A1AA] mt-1 leading-relaxed">{description}</p>
               )}
             </div>
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800/60"
+            className="text-[#71717A] hover:text-[#F4F4F5] p-1 rounded-md hover:bg-[#1E2026] transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {children && <div className="mt-4 pt-3 border-t border-[#162238]">{children}</div>}
+        {children && <div className="mt-4 pt-3 border-t border-[#27272A]">{children}</div>}
 
-        <div className="mt-6 flex items-center justify-end gap-3 pt-3 border-t border-[#162238]">
+        <div className="mt-6 flex items-center justify-end gap-2.5 pt-3 border-t border-[#27272A]">
           <Button variant="ghost" size="sm" onClick={onClose} disabled={isConfirmLoading}>
             {cancelLabel}
           </Button>

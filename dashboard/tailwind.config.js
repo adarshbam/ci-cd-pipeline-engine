@@ -8,6 +8,21 @@ export default {
   theme: {
     extend: {
       colors: {
+        platform: {
+          canvas: '#0B0C0E',
+          sidebar: '#18181B',
+          topbar: '#09090B',
+          card: '#111317',
+          surface: '#16181D',
+          elevated: '#1B1D22',
+          border: '#27272A',
+          'border-subtle': '#1F2024',
+          'border-hover': '#383B46',
+          'border-focus': '#3B82F6',
+          primary: '#F4F4F5',
+          secondary: '#A1A1AA',
+          muted: '#71717A',
+        },
         flow: {
           darkest: '#05080f',
           dark: '#080d1a',
@@ -27,13 +42,6 @@ export default {
           muted: '#64748b',
           subtle: '#94a3b8',
         }
-      },
-      boxShadow: {
-        'glow-cyan': '0 0 25px -4px rgba(6, 182, 212, 0.45)',
-        'glow-blue': '0 0 30px -4px rgba(56, 189, 248, 0.4)',
-        'glow-emerald': '0 0 25px -4px rgba(16, 185, 129, 0.4)',
-        'glow-card': '0 8px 32px 0 rgba(0, 0, 0, 0.5), inset 0 1px 0 0 rgba(255, 255, 255, 0.05)',
-        'glow-subtle': '0 4px 20px -2px rgba(14, 165, 233, 0.15)',
       },
       fontFamily: {
         sans: [

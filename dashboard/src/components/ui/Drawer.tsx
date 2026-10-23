@@ -43,28 +43,28 @@ export const Drawer: React.FC<DrawerProps> = ({
     <div className="fixed inset-0 z-50 overflow-hidden select-none">
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/70 backdrop-blur-sm transition-opacity duration-300"
+        className="fixed inset-0 bg-black/75 transition-opacity duration-300"
         onClick={onClose}
       />
 
       {/* Drawer Panel */}
       <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
         <div
-          className={`w-screen ${widthClasses} bg-[#0b1220] border-l border-[#1a2744] shadow-2xl flex flex-col transform transition-transform duration-300 ease-in-out select-text`}
+          className={`w-screen ${widthClasses} bg-[#111317] border-l border-[#27272A] shadow-2xl flex flex-col transform transition-transform duration-300 ease-in-out select-text`}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-[#1a2744] bg-[#0d1627]/60">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-[#27272A] bg-[#141519]">
             <div>
-              <div className="text-base font-semibold text-slate-100 flex items-center gap-2">
+              <div className="text-sm font-semibold text-[#F4F4F5] flex items-center gap-2">
                 {title}
               </div>
-              {subtitle && <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p>}
+              {subtitle && <p className="text-xs text-[#A1A1AA] mt-0.5">{subtitle}</p>}
             </div>
             <button
               onClick={onClose}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              className="p-1 rounded-md text-[#71717A] hover:text-[#F4F4F5] hover:bg-[#1E2026] transition-colors"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
           </div>
 
@@ -75,7 +75,7 @@ export const Drawer: React.FC<DrawerProps> = ({
 
           {/* Optional Footer */}
           {footer && (
-            <div className="px-6 py-3.5 border-t border-[#1a2744] bg-[#0d1627]/80 flex items-center justify-end gap-3">
+            <div className="px-6 py-3.5 border-t border-[#27272A] bg-[#141519] flex items-center justify-end gap-2.5">
               {footer}
             </div>
           )}

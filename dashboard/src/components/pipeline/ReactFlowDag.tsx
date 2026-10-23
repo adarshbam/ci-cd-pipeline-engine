@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import {
   ReactFlow,
   Background,
@@ -9,7 +9,7 @@ import {
   Node,
   ReactFlowProvider,
   useReactFlow,
-  MarkerType
+  useViewport
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import {
@@ -18,11 +18,8 @@ import {
   Minus,
   Plus,
   Maximize2,
+  Minimize2,
   RefreshCw,
-  Clock,
-  CheckCircle2,
-  AlertCircle,
-  Ban,
   ChevronRight
 } from 'lucide-react';
 import { WebhookNode } from './nodes/WebhookNode';
@@ -46,7 +43,7 @@ const FlowCanvas: React.FC<{
   viewMode: 'graph' | 'list';
   onToggleViewMode?: (mode: 'graph' | 'list') => void;
   isFullscreen: boolean;
-  setIsFullscreen: (fn: (prev: boolean) => boolean) => void;
+  setIsFullscreen: React.Dispatch<React.SetStateAction<boolean>>;
 }> = ({
   jobs,
   onSelectJob,
@@ -57,14 +54,20 @@ const FlowCanvas: React.FC<{
   setIsFullscreen
 }) => {
   const { zoomIn, zoomOut, fitView } = useReactFlow();
-  const [zoomLevel, setZoomLevel] = useState(100);
+  const { zoom } = useViewport();
+  const currentZoomPercent = Math.round(zoom * 100);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const userInteractedRef = useRef<boolean>(false);
+  const prevRunIdRef = useRef<string | undefined>(jobs[0]?.runId);
 
   // Custom node types registration
   const nodeTypes = useMemo(
-    () => ({
-      webhook: WebhookNode,
-      pipelineJob: PipelineJobNode,
-    } as any),
+    () =>
+      ({
+        webhook: WebhookNode,
+        pipelineJob: PipelineJobNode
+      } as any),
     []
   );
 
@@ -81,7 +84,7 @@ const FlowCanvas: React.FC<{
 
     const getRank = (job: Job, visited = new Set<string>()): number => {
       if (rankMap.has(job.id)) return rankMap.get(job.id)!;
-      if (visited.has(job.id)) return 0; // Avoid cyclic loop
+      if (visited.has(job.id)) return 0;
       visited.add(job.id);
 
       const deps = job.dependsOn || [];
@@ -154,9 +157,11 @@ const FlowCanvas: React.FC<{
             status: job.status,
             duration: job.duration,
             iconType: job.iconType,
-            progress: job.progress || (job.status === 'running' ? 65 : undefined),
+            progress:
+              job.progress || (job.status === 'running' ? 65 : undefined),
             stepCount: job.stepCount || 4,
-            completedSteps: job.completedSteps || (job.status === 'success' ? 4 : 2),
+            completedSteps:
+              job.completedSteps || (job.status === 'success' ? 4 : 2),
             subBadge:
               job.status === 'failed'
                 ? 'Alert / Failed'
@@ -208,7 +213,8 @@ const FlowCanvas: React.FC<{
       deps.forEach((depId) => {
         const depJob = jobById.get(depId);
         const isRunning = job.status === 'running';
-        const isSuccess = depJob?.status === 'success' && job.status === 'success';
+        const isSuccess =
+          depJob?.status === 'success' && job.status === 'success';
         const isFailed = job.status === 'failed';
         const isCancelled = job.status === 'cancelled';
 
@@ -229,7 +235,10 @@ const FlowCanvas: React.FC<{
               ? '#f59e0b'
               : '#475569',
             strokeWidth: isRunning || isSuccess ? 2.5 : 2,
-            strokeDasharray: job.status === 'queued' || job.status === 'skipped' ? '4 4' : undefined
+            strokeDasharray:
+              job.status === 'queued' || job.status === 'skipped'
+                ? '4 4'
+                : undefined
           }
         });
       });
@@ -241,35 +250,116 @@ const FlowCanvas: React.FC<{
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 
+  // Synchronize node data without moving node positions during live polling
   useEffect(() => {
-    setNodes(initialNodes);
+    setNodes((prevNodes) => {
+      if (prevNodes.length !== initialNodes.length) {
+        return initialNodes;
+      }
+      return prevNodes.map((prevNode) => {
+        const updated = initialNodes.find((n) => n.id === prevNode.id);
+        if (!updated) return prevNode;
+        return {
+          ...prevNode,
+          selected: updated.selected,
+          data: updated.data
+        };
+      });
+    });
   }, [initialNodes, setNodes]);
 
   useEffect(() => {
     setEdges(initialEdges);
   }, [initialEdges, setEdges]);
 
-  // Fit view automatically on load / node change
+  // Intelligent adaptive fitView calculation based on container and screen dimensions
+  const fitGraph = useCallback(
+    (isFull: boolean, animate = true) => {
+      const el = containerRef.current;
+      const width = el?.clientWidth || window.innerWidth;
+
+      let padding = 0.14;
+      let minZoom = 0.55;
+      let maxZoom = 1.25;
+
+      if (width < 480) {
+        // Mobile layout (375px - 430px)
+        padding = 0.08;
+        minZoom = 0.35;
+        maxZoom = 0.85;
+      } else if (width < 768) {
+        // Tablet (768px)
+        padding = 0.12;
+        minZoom = 0.45;
+        maxZoom = 1.05;
+      } else if (isFull) {
+        // Fullscreen mode: intelligently utilize the expanded space with prominent nodes
+        padding = 0.15;
+        minZoom = 0.65;
+        maxZoom = 1.45;
+      } else {
+        // Normal desktop layout
+        padding = 0.14;
+        minZoom = 0.6;
+        maxZoom = 1.25;
+      }
+
+      fitView({
+        padding,
+        minZoom,
+        maxZoom,
+        duration: animate ? 250 : 0
+      });
+    },
+    [fitView]
+  );
+
+  // Center/Fit view automatically on initial mount or when switching workflow runs
+  useEffect(() => {
+    const currentRunId = jobs[0]?.runId;
+    if (currentRunId !== prevRunIdRef.current || !prevRunIdRef.current) {
+      prevRunIdRef.current = currentRunId;
+      userInteractedRef.current = false;
+      const timer = setTimeout(() => {
+        fitGraph(isFullscreen, false);
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [jobs, isFullscreen, fitGraph]);
+
+  // Refit adaptively whenever entering or exiting fullscreen
   useEffect(() => {
     const timer = setTimeout(() => {
-      fitView({ padding: 0.18, duration: 300 });
-    }, 100);
+      fitGraph(isFullscreen, true);
+    }, 120);
     return () => clearTimeout(timer);
-  }, [fitView, jobs.length]);
+  }, [isFullscreen, fitGraph]);
 
-  const handleZoomChange = (delta: number) => {
-    if (delta > 0) {
-      zoomIn({ duration: 200 });
-      setZoomLevel((prev) => Math.min(140, prev + 10));
-    } else {
-      zoomOut({ duration: 200 });
-      setZoomLevel((prev) => Math.max(60, prev - 10));
-    }
-  };
+  // Handle escape key to exit fullscreen
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isFullscreen) {
+        setIsFullscreen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isFullscreen, setIsFullscreen]);
+
+  // Handle window / viewport resize gracefully without overriding active user exploration
+  useEffect(() => {
+    const handleResize = () => {
+      if (!userInteractedRef.current) {
+        fitGraph(isFullscreen, false);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [isFullscreen, fitGraph]);
 
   const handleFitView = () => {
-    fitView({ padding: 0.18, duration: 300 });
-    setZoomLevel(100);
+    userInteractedRef.current = false;
+    fitGraph(isFullscreen, true);
   };
 
   const onNodeClick = useCallback(
@@ -287,87 +377,113 @@ const FlowCanvas: React.FC<{
 
   return (
     <div
-      className={`relative rounded-2xl bg-[#080d19] border border-[#192742] overflow-hidden shadow-2xl transition-all duration-300 ${
-        isFullscreen ? 'fixed inset-4 z-50 bg-[#080d19]' : ''
+      ref={containerRef}
+      className={`rounded-xl border border-[#192742] overflow-hidden shadow-2xl transition-all duration-200 ${
+        isFullscreen
+          ? 'fixed inset-0 sm:inset-4 z-50 bg-[#080d19] flex flex-col'
+          : 'relative bg-[#080d19]'
       }`}
     >
-      {/* Top Toolbar matching screenshot */}
-      <div className="flex items-center justify-between px-5 py-3 border-b border-[#17243c] bg-[#0b1325]/90 select-none z-10 relative">
+      {/* Top Toolbar matching screenshot & refined for responsive space efficiency */}
+      <div className="flex items-center justify-between px-3 sm:px-4 py-2 sm:py-2.5 border-b border-[#17243c] bg-[#0b1325]/90 select-none z-10 relative gap-2 shrink-0">
         {/* Graph vs List Toggle */}
-        <div className="flex items-center gap-1 bg-[#070b14] p-1 rounded-xl border border-[#1a2742]">
+        <div className="flex items-center gap-1 bg-[#070b14] p-0.5 sm:p-1 rounded-lg border border-[#1a2742]">
           <button
             onClick={() => onToggleViewMode?.('graph')}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all select-none ${
+            className={`flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-md text-xs font-semibold transition-all select-none ${
               viewMode === 'graph'
-                ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40 shadow-[0_0_12px_rgba(14,165,233,0.3)]'
+                ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40 shadow-[0_0_10px_rgba(14,165,233,0.3)]'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             <GitBranch className="w-3.5 h-3.5" />
-            Graph
+            <span>Graph</span>
           </button>
           <button
             onClick={() => onToggleViewMode?.('list')}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all select-none ${
+            className={`flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-md text-xs font-medium transition-all select-none ${
               viewMode === 'list'
-                ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40 shadow-[0_0_12px_rgba(14,165,233,0.3)]'
+                ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40 shadow-[0_0_10px_rgba(14,165,233,0.3)]'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             <ListFilter className="w-3.5 h-3.5" />
-            List
+            <span>List</span>
           </button>
         </div>
 
-        {/* Center Hint */}
-        <div className="hidden md:flex items-center gap-2 text-xs text-slate-400 font-mono">
+        {/* Center Hint - Hidden on mobile/tablet to give full space to controls */}
+        <div className="hidden xl:flex items-center gap-2 text-xs text-slate-400 font-mono">
           <span className="w-2 h-2 rounded-full bg-sky-400 animate-pulse" />
           <span>Click any node to inspect real execution logs & step timeline</span>
         </div>
 
         {/* Zoom & Fullscreen Controls */}
-        <div className="flex items-center gap-2">
-          <div className="flex items-center bg-[#070b14] rounded-xl border border-[#1a2742] p-1 text-slate-400">
+        {viewMode === 'graph' ? (
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            {/* Zoom Stepper */}
+            <div className="flex items-center bg-[#070b14] rounded-lg border border-[#1a2742] p-0.5 text-slate-400">
+              <button
+                onClick={() => zoomOut({ duration: 200 })}
+                className="p-1 hover:text-white hover:bg-slate-800 rounded transition-colors"
+                title="Zoom Out"
+                aria-label="Zoom Out"
+              >
+                <Minus className="w-3.5 h-3.5" />
+              </button>
+              <span className="px-1.5 sm:px-2 text-[11px] sm:text-xs font-mono font-medium text-slate-300 min-w-[36px] sm:min-w-[44px] text-center select-none">
+                {currentZoomPercent}%
+              </span>
+              <button
+                onClick={() => zoomIn({ duration: 200 })}
+                className="p-1 hover:text-white hover:bg-slate-800 rounded transition-colors"
+                title="Zoom In"
+                aria-label="Zoom In"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* Reset / Center DAG */}
             <button
-              onClick={() => handleZoomChange(-10)}
-              className="p-1 hover:text-white hover:bg-slate-800 rounded transition-colors"
-              title="Zoom Out"
+              onClick={handleFitView}
+              className="p-1.5 sm:p-2 rounded-lg bg-[#070b14] border border-[#1a2742] text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              title="Reset / Center DAG"
+              aria-label="Reset / Center DAG"
             >
-              <Minus className="w-3.5 h-3.5" />
+              <RefreshCw className="w-3.5 h-3.5" />
             </button>
-            <span className="px-2 text-xs font-mono font-medium text-slate-300 min-w-12 text-center">
-              {zoomLevel}%
-            </span>
+
+            {/* Fullscreen Button */}
             <button
-              onClick={() => handleZoomChange(10)}
-              className="p-1 hover:text-white hover:bg-slate-800 rounded transition-colors"
-              title="Zoom In"
+              onClick={() => setIsFullscreen((prev) => !prev)}
+              className="p-1.5 sm:p-2 rounded-lg bg-[#070b14] border border-[#1a2742] text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              title={isFullscreen ? 'Exit Fullscreen (Esc)' : 'Fullscreen'}
+              aria-label={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
             >
-              <Plus className="w-3.5 h-3.5" />
+              {isFullscreen ? (
+                <Minimize2 className="w-3.5 h-3.5" />
+              ) : (
+                <Maximize2 className="w-3.5 h-3.5" />
+              )}
             </button>
           </div>
-
-          <button
-            onClick={handleFitView}
-            className="p-2 rounded-xl bg-[#070b14] border border-[#1a2742] text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-            title="Reset / Center DAG"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-          </button>
-
-          <button
-            onClick={() => setIsFullscreen((prev) => !prev)}
-            className="p-2 rounded-xl bg-[#070b14] border border-[#1a2742] text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-            title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
-          >
-            <Maximize2 className="w-3.5 h-3.5" />
-          </button>
-        </div>
+        ) : (
+          <div className="text-xs text-slate-400 font-mono">
+            {jobs.length} jobs declared
+          </div>
+        )}
       </div>
 
       {/* Main Canvas Viewport */}
       {viewMode === 'graph' ? (
-        <div className={`w-full relative ${isFullscreen ? 'h-[calc(100vh-100px)]' : 'h-[370px]'}`}>
+        <div
+          className={`w-full relative ${
+            isFullscreen
+              ? 'flex-1 min-h-0'
+              : 'h-[370px] sm:h-[400px]'
+          }`}
+        >
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -375,9 +491,13 @@ const FlowCanvas: React.FC<{
             onEdgesChange={onEdgesChange}
             nodeTypes={nodeTypes}
             onNodeClick={onNodeClick}
+            onMoveStart={() => {
+              userInteractedRef.current = true;
+            }}
             fitView
-            minZoom={0.4}
-            maxZoom={1.6}
+            fitViewOptions={{ padding: 0.14, minZoom: 0.35, maxZoom: 1.45 }}
+            minZoom={0.25}
+            maxZoom={2.0}
             proOptions={{ hideAttribution: true }}
             className="bg-[#080d19]"
           >
@@ -394,28 +514,38 @@ const FlowCanvas: React.FC<{
         </div>
       ) : (
         /* Alternative Linear List View */
-        <div className="p-5 space-y-2 max-h-[370px] overflow-y-auto">
+        <div
+          className={`p-4 sm:p-5 space-y-2 overflow-y-auto ${
+            isFullscreen ? 'flex-1 min-h-0' : 'max-h-[380px]'
+          }`}
+        >
           {jobs.map((job, idx) => (
             <div
               key={job.id}
               onClick={() => onSelectJob(job)}
-              className="flex items-center justify-between p-3.5 rounded-xl bg-[#0d1629] border border-[#1b2b48] hover:border-sky-500/50 hover:bg-[#111e38] transition-all cursor-pointer"
+              className="flex items-center justify-between p-3 sm:p-3.5 rounded-lg bg-[#0d1629] border border-[#1b2b48] hover:border-sky-500/50 hover:bg-[#111e38] transition-all cursor-pointer"
             >
-              <div className="flex items-center gap-3">
-                <span className="font-mono text-xs text-slate-500 w-4">{idx + 1}</span>
-                <div>
-                  <h4 className="text-xs font-bold text-slate-100">{job.name}</h4>
-                  <div className="flex items-center gap-2 mt-0.5 text-[10px] text-slate-400 font-mono">
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="font-mono text-xs text-slate-500 w-4 shrink-0">
+                  {idx + 1}
+                </span>
+                <div className="min-w-0">
+                  <h4 className="text-xs font-bold text-slate-100 truncate">
+                    {job.name}
+                  </h4>
+                  <div className="flex items-center gap-2 mt-0.5 text-[10px] text-slate-400 font-mono flex-wrap">
                     <span>{job.duration || '0s'}</span>
                     {job.dependsOn?.length ? (
-                      <span>• needs: {job.dependsOn.join(', ')}</span>
+                      <span className="truncate">
+                        • needs: {job.dependsOn.join(', ')}
+                      </span>
                     ) : (
                       <span>• root job</span>
                     )}
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2.5 shrink-0">
                 <StatusBadge status={job.status} size="xs" />
                 <ChevronRight className="w-4 h-4 text-slate-500" />
               </div>
@@ -429,14 +559,19 @@ const FlowCanvas: React.FC<{
 
 export const ReactFlowDag: React.FC<ReactFlowDagProps> = (props) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [viewMode, setViewMode] = useState<'graph' | 'list'>(props.viewMode || 'graph');
+  const [internalViewMode, setInternalViewMode] = useState<'graph' | 'list'>(
+    props.viewMode || 'graph'
+  );
+
+  const viewMode = props.viewMode ?? internalViewMode;
+  const onToggleViewMode = props.onToggleViewMode ?? setInternalViewMode;
 
   return (
     <ReactFlowProvider>
       <FlowCanvas
         {...props}
         viewMode={viewMode}
-        onToggleViewMode={setViewMode}
+        onToggleViewMode={onToggleViewMode}
         isFullscreen={isFullscreen}
         setIsFullscreen={setIsFullscreen}
       />

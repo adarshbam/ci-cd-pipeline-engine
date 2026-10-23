@@ -1,4 +1,4 @@
-import type { Workflow } from "../workflow/workflow.js";
+import type { CommitStatusInfo, Workflow } from "../workflow/workflow.js";
 import PipelineEngine from "../pipeline/pipeline-engine.js";
 import { resolveEnvironment } from "../environments/environment-resolver.js";
 import { readLogEntries, type LogQuery } from "../logging/log-reader.js";
@@ -12,6 +12,13 @@ import { getGitHubToken } from "../github/github-credentials.js";
 import { PORT } from "../config/config.js";
 import { loadAllStoredRuns, getStoredRun } from "../storage/run-store.js";
 import RunPipeline from "../pipeline/pipeline-run.js";
+import {
+  listRunArtifacts,
+  listAllArtifacts,
+  getArtifactPath,
+  validateArtifactIdentifier,
+} from "../artifacts/artifact-manager.js";
+import { stat } from "node:fs/promises";
 
 // Helper: Verify local or authenticated management access
 function isAuthorizedManagement(req: Request): boolean {
@@ -302,6 +309,10 @@ export interface WebhookDeliveryRecord {
   sender?: string;
   timestamp: string;
   status: "accepted" | "rejected" | "skipped";
+  validationOutcome?: string;
+  outcomeReason?: string;
+  runId?: string;
+  commitStatus?: CommitStatusInfo;
 }
 
 function getLatestRun(runs: any[]): any | undefined {
@@ -530,13 +541,14 @@ export function createWebhookRouter(workflows: Workflow[]) {
           async (push, deliveryId) => {
             // Check event subscription and allowed branches.
             const subscribed = workflow.trigger.events.includes("push");
-
             const allowedBranches = workflow.trigger.allowedBranches;
-
             const branchAllowed =
               !allowedBranches?.length || allowedBranches.includes(push.branch);
 
             if (!subscribed || !branchAllowed) {
+              const reason = !subscribed
+                ? `Event 'push' is not subscribed by workflow trigger (subscribed: ${workflow.trigger.events.join(", ")})`
+                : `Branch '${push.branch}' is not in allowedBranches (${allowedBranches?.join(", ") || "none"})`;
               recentDeliveries.unshift({
                 id: deliveryId,
                 workflowName: workflow.name,
@@ -546,13 +558,14 @@ export function createWebhookRouter(workflows: Workflow[]) {
                 commitSha: push.commitSha,
                 timestamp: new Date().toISOString(),
                 status: "skipped",
+                validationOutcome: "Ignored / Skipped",
+                outcomeReason: reason,
               });
-              if (recentDeliveries.length > 25) recentDeliveries.pop();
+              if (recentDeliveries.length > 50) recentDeliveries.pop();
               return;
             }
 
             const repositories = workflow.trigger.allowedRepositories;
-
             const repositoryAllowed =
               repositories?.includes(push.repository) === true;
 
@@ -566,20 +579,48 @@ export function createWebhookRouter(workflows: Workflow[]) {
                 commitSha: push.commitSha,
                 timestamp: new Date().toISOString(),
                 status: "rejected",
+                validationOutcome: "Rejected",
+                outcomeReason: `Repository '${push.repository}' is not in allowedRepositories (${repositories?.join(", ") || "none configured"})`,
               });
-              if (recentDeliveries.length > 25) recentDeliveries.pop();
+              if (recentDeliveries.length > 50) recentDeliveries.pop();
               return;
             }
 
             const deliveryKey = `${workflow.name}:${deliveryId}`;
 
             if (processedDeliveries.has(deliveryKey)) {
+              recentDeliveries.unshift({
+                id: deliveryId,
+                workflowName: workflow.name,
+                event: "push",
+                repository: push.repository,
+                branch: push.branch,
+                commitSha: push.commitSha,
+                timestamp: new Date().toISOString(),
+                status: "skipped",
+                validationOutcome: "Duplicate Ignored",
+                outcomeReason: `Delivery ID '${deliveryId}' was already processed for workflow '${workflow.name}'`,
+              });
+              if (recentDeliveries.length > 50) recentDeliveries.pop();
               return;
             }
 
             processedDeliveries.add(deliveryKey);
 
-            recentDeliveries.unshift({
+            // Compute initial commit status info
+            const hasToken = Boolean(process.env.GITHUB_TOKEN?.trim());
+            const commitStatusInfo: CommitStatusInfo = {
+              state: hasToken ? "pending" : "unavailable",
+              context: "custom-ci/pipeline",
+              description: hasToken
+                ? "Pipeline running"
+                : "GITHUB_TOKEN not configured; commit status reporting unavailable",
+              url: `https://github.com/${push.repository}/commit/${push.commitSha}`,
+              targetUrl: `http://localhost:${PORT}/runs`,
+              updatedAt: new Date().toISOString(),
+            };
+
+            const deliveryRecord: WebhookDeliveryRecord = {
               id: deliveryId,
               workflowName: workflow.name,
               event: "push",
@@ -588,54 +629,103 @@ export function createWebhookRouter(workflows: Workflow[]) {
               commitSha: push.commitSha,
               timestamp: new Date().toISOString(),
               status: "accepted",
-            });
-            if (recentDeliveries.length > 25) recentDeliveries.pop();
+              validationOutcome: "Accepted & Triggered",
+              outcomeReason: `Matched push to '${push.branch}' on repository '${push.repository}'`,
+              commitStatus: commitStatusInfo,
+            };
+
+            recentDeliveries.unshift(deliveryRecord);
+            if (recentDeliveries.length > 50) recentDeliveries.pop();
 
             try {
-              if (process.env.GITHUB_TOKEN?.trim()) {
-                await reportGitHubCommitStatus({
-                  repository: push.repository,
-                  commitSha: push.commitSha,
-                  state: "pending",
-                  token: getGitHubToken(),
-                  context: "custom-ci/pipeline",
-                  description: "Pipeline running",
-                  ...(process.env.GITHUB_API_BASE_URL
-                    ? { apiBaseUrl: process.env.GITHUB_API_BASE_URL }
-                    : {}),
-                });
-              }
-              const run = await engine.run(push.branch);
-
-              if (process.env.GITHUB_TOKEN?.trim()) {
-                void engine
-                  .waitForCompletion(run.id)
-                  .then(async (completed) => {
-                    const state =
-                      completed.status === "SUCCESS" ? "success" : "failure";
-
-                    // Report final state to GitHub here.
-                    await reportGitHubCommitStatus({
-                      repository: push.repository,
-                      commitSha: push.commitSha,
-                      state,
-                      token: getGitHubToken(),
-                      context: "custom-ci/pipeline",
-                      description: "Pipeline completed run.",
-                      ...(process.env.GITHUB_API_BASE_URL
-                        ? { apiBaseUrl: process.env.GITHUB_API_BASE_URL }
-                        : {}),
-                    });
-                  })
-                  .catch((error) => {
-                    console.error(
-                      "GitHub final status reporting failed:",
-                      error,
-                    );
+              if (hasToken) {
+                try {
+                  await reportGitHubCommitStatus({
+                    repository: push.repository,
+                    commitSha: push.commitSha,
+                    state: "pending",
+                    token: getGitHubToken(),
+                    context: "custom-ci/pipeline",
+                    description: "Pipeline running",
+                    ...(process.env.GITHUB_API_BASE_URL
+                      ? { apiBaseUrl: process.env.GITHUB_API_BASE_URL }
+                      : {}),
                   });
+                } catch (reportingErr: any) {
+                  console.error(
+                    "GitHub pending status reporting failed:",
+                    reportingErr?.message || reportingErr,
+                  );
+                  commitStatusInfo.state = "unavailable";
+                  commitStatusInfo.description =
+                    reportingErr?.message || "Status reporting failed";
+                }
               }
+
+              const run = await engine.run({
+                branch: push.branch,
+                commitSha: push.commitSha,
+                repository: push.repository,
+                deliveryId: deliveryId,
+                commitStatus: commitStatusInfo,
+              });
+
+              deliveryRecord.runId = run.id;
+
+              void engine
+                .waitForCompletion(run.id)
+                .then(async (completed) => {
+                  const state =
+                    completed.status === "SUCCESS" ? "success" : "failure";
+                  const description =
+                    completed.status === "SUCCESS"
+                      ? "Pipeline completed successfully."
+                      : "Pipeline failed one or more jobs.";
+
+                  if (hasToken) {
+                    try {
+                      await reportGitHubCommitStatus({
+                        repository: push.repository,
+                        commitSha: push.commitSha,
+                        state,
+                        token: getGitHubToken(),
+                        context: "custom-ci/pipeline",
+                        description,
+                        ...(process.env.GITHUB_API_BASE_URL
+                          ? { apiBaseUrl: process.env.GITHUB_API_BASE_URL }
+                          : {}),
+                      });
+                    } catch (reportingErr) {
+                      console.error(
+                        "GitHub final status reporting failed:",
+                        reportingErr,
+                      );
+                    }
+                  }
+
+                  const updatedStatus: CommitStatusInfo = {
+                    state: hasToken ? state : "unavailable",
+                    context: "custom-ci/pipeline",
+                    description: hasToken
+                      ? description
+                      : "GITHUB_TOKEN not configured; commit status reporting unavailable",
+                    url: `https://github.com/${push.repository}/commit/${push.commitSha}`,
+                    targetUrl: `http://localhost:${PORT}/runs/${run.id}`,
+                    updatedAt: new Date().toISOString(),
+                  };
+
+                  run.commitStatus = updatedStatus;
+                  deliveryRecord.commitStatus = updatedStatus;
+                })
+                .catch((error) => {
+                  console.error("GitHub completion tracking failed:", error);
+                });
             } catch (error) {
               processedDeliveries.delete(deliveryKey);
+              deliveryRecord.status = "rejected";
+              deliveryRecord.validationOutcome = "Execution Error";
+              deliveryRecord.outcomeReason =
+                error instanceof Error ? error.message : String(error);
               throw error;
             }
           },
@@ -866,6 +956,10 @@ export function createWebhookRouter(workflows: Workflow[]) {
             : undefined,
         branch: r.branch || "main",
         environment: r.environment,
+        commitSha: r.commitSha,
+        repository: r.repository,
+        deliveryId: r.deliveryId,
+        commitStatus: r.commitStatus,
         jobCount: totalJobs,
         succeededJobCount: succeededJobs,
         failedJobCount: failedJobs,
@@ -943,6 +1037,10 @@ export function createWebhookRouter(workflows: Workflow[]) {
           : undefined,
       branch: targetRun.branch || "main",
       environment: targetRun.environment,
+      commitSha: targetRun.commitSha,
+      repository: targetRun.repository,
+      deliveryId: targetRun.deliveryId,
+      commitStatus: targetRun.commitStatus,
       jobs: jobsWithDeps,
       failedJobId: firstFailedJob?.jobId,
     });
@@ -1055,6 +1153,145 @@ export function createWebhookRouter(workflows: Workflow[]) {
     });
   });
 
+  // 8b. List Run Artifacts
+  router.get(
+    "/api/runs/:runId/artifacts",
+    requireManagementAuth,
+    async (req, res) => {
+      const { runId } = req.params;
+      if (typeof runId !== "string" || !/^[a-zA-Z0-9_-]+$/.test(runId)) {
+        return res.status(400).json({ error: "Invalid run ID format" });
+      }
+
+      try {
+        const artifacts = await listRunArtifacts(runId);
+        return res.status(200).json({
+          runId,
+          artifacts,
+          total: artifacts.length,
+        });
+      } catch (error) {
+        console.error(`Error listing artifacts for run ${runId}:`, error);
+        return res.status(500).json({ error: "Failed to list artifacts" });
+      }
+    },
+  );
+
+  // 8c. Download Run Artifact with Job ID
+  router.get(
+    "/api/runs/:runId/artifacts/:jobId/:artifactName/download",
+    requireManagementAuth,
+    async (req, res) => {
+      const { runId, jobId, artifactName } = req.params;
+
+      try {
+        validateArtifactIdentifier(runId);
+        validateArtifactIdentifier(jobId);
+        validateArtifactIdentifier(artifactName);
+      } catch {
+        return res
+          .status(400)
+          .json({ error: "Invalid artifact identifier format" });
+      }
+
+      try {
+        const filePath = await getArtifactPath(runId, jobId, artifactName);
+        let fileStat;
+        try {
+          fileStat = await stat(filePath);
+        } catch (e: any) {
+          if (e?.code === "ENOENT") {
+            return res.status(404).json({ error: "Artifact not found" });
+          }
+          throw e;
+        }
+
+        if (fileStat.isDirectory()) {
+          return res
+            .status(400)
+            .json({ error: "Directory downloads not supported directly" });
+        }
+
+        res.setHeader(
+          "Content-Disposition",
+          `attachment; filename="${artifactName}"`,
+        );
+        res.setHeader("Content-Type", "application/octet-stream");
+        res.setHeader("Content-Length", fileStat.size);
+
+        return res.sendFile(filePath);
+      } catch (error) {
+        console.error("Artifact download error:", error);
+        return res.status(500).json({ error: "Failed to download artifact" });
+      }
+    },
+  );
+
+  // 8d. Download Run Artifact shortcut (resolves Job ID)
+  router.get(
+    "/api/runs/:runId/artifacts/:artifactName/download",
+    requireManagementAuth,
+    async (req, res) => {
+      const { runId, artifactName } = req.params;
+
+      try {
+        validateArtifactIdentifier(runId);
+        validateArtifactIdentifier(artifactName);
+      } catch {
+        return res
+          .status(400)
+          .json({ error: "Invalid artifact identifier format" });
+      }
+
+      try {
+        const artifacts = await listRunArtifacts(runId);
+        const match = artifacts.find((a) => a.name === artifactName);
+        if (!match) {
+          return res.status(404).json({ error: "Artifact not found" });
+        }
+
+        const filePath = await getArtifactPath(
+          runId,
+          match.jobId,
+          artifactName,
+        );
+        const fileStat = await stat(filePath);
+
+        if (fileStat.isDirectory()) {
+          return res
+            .status(400)
+            .json({ error: "Directory downloads not supported directly" });
+        }
+
+        res.setHeader(
+          "Content-Disposition",
+          `attachment; filename="${artifactName}"`,
+        );
+        res.setHeader("Content-Type", "application/octet-stream");
+        res.setHeader("Content-Length", fileStat.size);
+
+        return res.sendFile(filePath);
+      } catch (error) {
+        console.error("Artifact download error:", error);
+        return res.status(500).json({ error: "Failed to download artifact" });
+      }
+    },
+  );
+
+  // 8e. Global Artifacts Listing
+  router.get("/api/artifacts", requireManagementAuth, async (_req, res) => {
+    try {
+      const artifacts = await listAllArtifacts();
+      return res.status(200).json({
+        artifacts,
+        total: artifacts.length,
+      });
+    } catch (error) {
+      console.error("Error listing all artifacts:", error);
+      return res.status(500).json({ error: "Failed to list artifacts" });
+    }
+  });
+
   // 9. Overall Engine & Aggregate Metrics
   router.get("/api/metrics", requireManagementAuth, (_req, res) => {
     let totalRuns = 0;
@@ -1135,13 +1372,162 @@ export function createWebhookRouter(workflows: Workflow[]) {
       githubWebhookSecretConfigured: hasWebhookSecret,
       publicWebhookBaseUrl: publicBaseUrl,
       managementSecretConfigured: hasManagementSecret,
-      recentDeliveries: recentDeliveries.slice(0, 20),
+      recentDeliveries: recentDeliveries.slice(0, 50),
       memoryPersistenceNotice:
         "In-Memory Engine Storage: Run history is stored in memory and will reset if the server process restarts.",
     });
   });
 
-  // 11. Read-Only GitHub API Verification Probe (Management Authorized)
+  // 11. Webhook Deliveries List
+  router.get("/api/webhooks/deliveries", requireManagementAuth, (_req, res) => {
+    return res.json({
+      deliveries: recentDeliveries,
+      total: recentDeliveries.length,
+    });
+  });
+
+  // 12. Real Activity Events Stream
+  router.get("/api/events", requireManagementAuth, (_req, res) => {
+    const events: Array<{
+      id: string;
+      timestamp: string;
+      title: string;
+      description: string;
+      type: "webhook" | "build" | "test" | "lint" | "package" | "deploy" | "system";
+      status: string;
+      metadata?: string | undefined;
+      timeMs: number;
+    }> = [];
+
+    // 1. Webhook Deliveries
+    for (const del of recentDeliveries) {
+      const timeMs = new Date(del.timestamp).getTime();
+      const timeStr = new Date(del.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const shortSha = del.commitSha ? del.commitSha.slice(0, 7) : "HEAD";
+      events.push({
+        id: `evt-del-${del.id}`,
+        timestamp: timeStr,
+        title: del.status === "accepted" ? "Webhook delivery accepted" : del.status === "rejected" ? "Webhook delivery rejected" : "Webhook delivery skipped",
+        description: `${shortSha} • ${del.repository}@${del.branch} • ${del.validationOutcome || del.status}`,
+        type: "webhook",
+        status: del.status === "accepted" ? "info" : "failed",
+        metadata: del.runId,
+        timeMs,
+      });
+    }
+
+    // 2. Runs across engines
+    for (const eng of engines.values()) {
+      for (const r of eng.getAllRuns()) {
+        const startMs = r.startedAt ? new Date(r.startedAt).getTime() : new Date(r.createdAt).getTime();
+        const startTimeStr = new Date(startMs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        
+        events.push({
+          id: `evt-run-${r.id}-start`,
+          timestamp: startTimeStr,
+          title: `Run started (${r.id.slice(0, 8)})`,
+          description: `Workflow '${r.pipelineId}' triggered on ${r.branch || 'main'}`,
+          type: "system",
+          status: "running",
+          metadata: r.id,
+          timeMs: startMs,
+        });
+
+        if (r.finishedAt) {
+          const finishMs = new Date(r.finishedAt).getTime();
+          const finishTimeStr = new Date(finishMs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          const isSuccess = r.status === "SUCCESS";
+          const dur = r.startedAt ? Math.round((finishMs - new Date(r.startedAt).getTime()) / 1000) + 's' : 'completed';
+          events.push({
+            id: `evt-run-${r.id}-end`,
+            timestamp: finishTimeStr,
+            title: `Run ${r.status.toLowerCase()} (${r.id.slice(0, 8)})`,
+            description: `${r.pipelineId} • ${Object.keys(r.jobs || {}).length} jobs • ${dur}`,
+            type: "system",
+            status: isSuccess ? "success" : r.status === "CANCELLED" ? "cancelled" : "failed",
+            metadata: r.id,
+            timeMs: finishMs,
+          });
+        }
+      }
+    }
+
+    // Sort newest first
+    events.sort((a, b) => b.timeMs - a.timeMs);
+
+    // If no events have occurred yet, provide a clean initial state
+    if (events.length === 0) {
+      events.push({
+        id: "evt-initial",
+        timestamp: "Ready",
+        title: "Engine Ready",
+        description: "Awaiting GitHub push webhooks or manual triggers",
+        type: "system",
+        status: "info",
+        timeMs: Date.now(),
+      });
+    }
+
+    return res.json(events.slice(0, 20).map(({ timeMs, ...rest }) => rest));
+  });
+
+  // 13. Declarative Environments List
+  router.get("/api/environments", requireManagementAuth, (_req, res) => {
+    const envsList: any[] = [];
+    
+    let prodHealthUrl = "http://localhost:8080/health";
+    let testHealthUrl = "http://localhost:8080/health";
+
+    for (const wf of workflows) {
+      if (wf.environments?.prod?.healthUrl) {
+        prodHealthUrl = wf.environments.prod.healthUrl;
+      }
+      if (wf.environments?.test?.healthUrl) {
+        testHealthUrl = wf.environments.test.healthUrl;
+      }
+    }
+
+    let lastProdRun: any;
+    let lastTestRun: any;
+    for (const eng of engines.values()) {
+      for (const r of eng.getAllRuns()) {
+        if (r.environment === "PROD" && (!lastProdRun || new Date(r.createdAt) > new Date(lastProdRun.createdAt))) {
+          lastProdRun = r;
+        }
+        if (r.environment === "TEST" && (!lastTestRun || new Date(r.createdAt) > new Date(lastTestRun.createdAt))) {
+          lastTestRun = r;
+        }
+      }
+    }
+
+    envsList.push({
+      id: "env-prod",
+      name: "Production",
+      status: lastProdRun?.status === "SUCCESS" ? "healthy" : "idle",
+      url: prodHealthUrl,
+      currentRunId: lastProdRun?.id,
+      lastDeployedAt: lastProdRun?.finishedAt || "Not deployed",
+      activeVersion: lastProdRun?.commitSha ? lastProdRun.commitSha.slice(0, 7) : "v1.0.0",
+      healthScore: 100,
+      targetBranch: "main",
+    });
+
+    envsList.push({
+      id: "env-test",
+      name: "Staging / Preview",
+      status: lastTestRun?.status === "SUCCESS" ? "healthy" : "idle",
+      url: testHealthUrl,
+      currentRunId: lastTestRun?.id,
+      lastDeployedAt: lastTestRun?.finishedAt || "Not deployed",
+      activeVersion: lastTestRun?.commitSha ? lastTestRun.commitSha.slice(0, 7) : "v1.0.0-rc",
+      healthScore: 100,
+      targetBranch: "staging",
+    });
+
+    return res.json(envsList);
+  });
+
+  // 14. Read-Only GitHub API Verification Probe (Management Authorized)
   router.post("/api/integrations/verify-github", requireManagementAuth, json(), async (req, res) => {
 
     const token = process.env.GITHUB_TOKEN?.trim();

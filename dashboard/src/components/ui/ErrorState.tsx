@@ -17,13 +17,13 @@ export const ErrorState: React.FC<ErrorStateProps> = ({
 }) => {
   return (
     <div
-      className={`flex flex-col items-center justify-center p-8 text-center rounded-xl border border-red-900/30 bg-[#1b0e14]/60 ${className}`}
+      className={`flex flex-col items-center justify-center p-8 text-center rounded-xl border border-[#4C1D24] bg-[#1A1114] ${className}`}
     >
-      <div className="w-12 h-12 rounded-xl bg-red-950/60 border border-red-800/50 flex items-center justify-center text-red-400 mb-4 shadow-[0_0_20px_rgba(239,68,68,0.2)]">
-        <AlertTriangle className="w-6 h-6" />
+      <div className="w-10 h-10 rounded-lg bg-[#241215] border border-[#4C1D24] flex items-center justify-center text-[#F87171] mb-3.5">
+        <AlertTriangle className="w-5 h-5" />
       </div>
-      <h3 className="text-base font-semibold text-slate-100 mb-1">{title}</h3>
-      <p className="text-sm text-slate-400 max-w-sm mb-5 leading-relaxed">{message}</p>
+      <h3 className="text-sm font-semibold text-[#F4F4F5] mb-1">{title}</h3>
+      <p className="text-xs text-[#A1A1AA] max-w-sm mb-4 leading-relaxed">{message}</p>
       {onRetry && (
         <Button variant="secondary" size="sm" icon={<RefreshCw className="w-3.5 h-3.5" />} onClick={onRetry}>
           Retry Connection

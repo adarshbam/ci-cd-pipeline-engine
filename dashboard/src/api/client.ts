@@ -15,6 +15,7 @@ import {
   BackendWorkflowDetail,
   IntegrationsReadiness,
   AggregateMetrics,
+  WebhookDeliveryItem,
   mapBackendStatus
 } from '../types';
 import {
@@ -323,7 +324,11 @@ export const pipelineApi = {
   /**
    * Fetches details of a specific pipeline run (or workflow topology if run doesn't exist)
    */
-  async getRunById(runId: string, mode?: DataMode): Promise<PipelineRun | null> {
+  async getRunById(
+    runId: string,
+    mode?: DataMode,
+    forcePreview?: boolean
+  ): Promise<PipelineRun | null> {
     const currentMode = mode || getCurrentDataMode();
     if (currentMode === 'demo') {
       if (runId === mockMainRun.id || runId === 'latest' || runId === 'deploy-main') {
@@ -346,10 +351,12 @@ export const pipelineApi = {
           runNumber: 1,
           status: mapBackendStatus(br.status),
           branch: br.branch || 'main',
-          commitSha: br.runId.slice(0, 7),
-          commitMessage: `Execution run ${br.runId.slice(0, 8)}`,
-          author: { name: 'Engine Operator', username: 'local-runner' },
-          trigger: 'GitHub Push / Engine Trigger',
+          commitSha: br.commitSha ? br.commitSha.slice(0, 7) : br.runId.slice(0, 7),
+          commitMessage: br.commitSha
+            ? `Push commit ${br.commitSha.slice(0, 7)} on ${br.branch || 'main'}`
+            : `Execution run ${br.runId.slice(0, 8)}`,
+          author: { name: 'GitHub Webhook', username: 'github' },
+          trigger: br.deliveryId ? `GitHub Push (${br.deliveryId.slice(0, 8)})` : 'Pipeline Engine',
           totalJobs: Object.keys(br.jobs || {}).length,
           duration: br.durationMs
             ? formatDuration(br.durationMs)
@@ -359,6 +366,10 @@ export const pipelineApi = {
           startedAt: br.startedAt ? new Date(br.startedAt).toLocaleTimeString() : 'Recently',
           elapsedTime: br.finishedAt ? 'Completed' : 'Running',
           environment: br.environment,
+          repository: br.repository,
+          deliveryId: br.deliveryId,
+          commitStatus: br.commitStatus,
+          isIdlePreview: false,
           jobs: Object.values(br.jobs || {}).map((j: any) => ({
             id: j.jobId,
             runId: br.runId,
@@ -387,35 +398,45 @@ export const pipelineApi = {
       // Not a run ID, check if runId is a workflow name!
     }
 
-    // If ID is a workflow name, build an idle/topology representation from real workflow
+    // If ID is a workflow name, check if workflow has an actual previous run!
     try {
       const wfDetail = await this.getWorkflowDetail(runId, 'real');
       if (wfDetail && wfDetail.workflow) {
+        // If not explicitly asking for preview and workflow has an executed run, show the latest run!
+        if (!forcePreview && wfDetail.lastRun?.id) {
+          const latestRun = await this.getRunById(wfDetail.lastRun.id, 'real');
+          if (latestRun) {
+            return latestRun;
+          }
+        }
+
+        // Otherwise (or if forcePreview=true), build an idle/topology representation
         const wf = wfDetail.workflow;
         const jobKeys = Object.keys(wf.jobs || {});
         return {
-          id: `idle-${wf.name}`,
+          id: `preview-${wf.name}`,
           workflowId: wf.name,
           workflowName: wf.name,
           runNumber: wfDetail.runsCount || 0,
-          status: 'queued',
+          status: 'idle',
+          isIdlePreview: true,
           branch: wf.trigger.allowedBranches?.[0] || 'main',
           commitSha: 'HEAD',
-          commitMessage: `Workflow definition for ${wf.name}`,
+          commitMessage: `Workflow definition preview for ${wf.name}`,
           author: { name: 'Workflow Config', username: 'config' },
-          trigger: 'Configuration Topology',
+          trigger: 'Workflow Definition Preview',
           totalJobs: jobKeys.length,
           duration: 'Not run',
-          startedAt: 'Ready',
-          elapsedTime: 'Ready to trigger',
+          startedAt: 'Not run',
+          elapsedTime: 'Not run',
           jobs: jobKeys.map((jk) => {
             const jDef = wf.jobs[jk];
             return {
               id: jk,
-              runId: `idle-${wf.name}`,
+              runId: `preview-${wf.name}`,
               name: jk,
-              status: 'queued',
-              duration: '0s',
+              status: 'idle',
+              duration: 'Not run',
               iconType: jk.includes('test')
                 ? 'test'
                 : jk.includes('lint')
@@ -622,12 +643,131 @@ export const pipelineApi = {
     );
   },
 
-  async getEnvironments(): Promise<Environment[]> {
-    return [...mockEnvironments];
+  async getEnvironments(mode?: DataMode): Promise<Environment[]> {
+    const currentMode = mode || getCurrentDataMode();
+    if (currentMode === 'demo') {
+      return [...mockEnvironments];
+    }
+    return safeFetch<Environment[]>(
+      `${BACKEND_URL}/api/environments`,
+      { method: 'GET' },
+      [...mockEnvironments]
+    );
   },
 
-  async getArtifacts(): Promise<Artifact[]> {
-    return [...mockArtifacts];
+  async getRunArtifacts(runId: string, mode?: DataMode): Promise<Artifact[]> {
+    const currentMode = mode || getCurrentDataMode();
+    if (currentMode === 'demo') {
+      return [...mockArtifacts];
+    }
+    try {
+      const res = await safeFetch<{ runId: string; artifacts: any[] }>(
+        `${BACKEND_URL}/api/runs/${runId}/artifacts`,
+        { method: 'GET' },
+        { runId, artifacts: [] }
+      );
+      return (res.artifacts || []).map((a) => ({
+        id: a.id,
+        runId: a.runId || runId,
+        jobId: a.jobId,
+        jobName: a.jobId,
+        name: a.name,
+        size: a.size,
+        sizeBytes: a.sizeBytes,
+        type: a.type || 'binary',
+        createdAt: a.createdAt,
+        sha256: a.sha256 || '',
+        downloadUrl: a.downloadUrl,
+      }));
+    } catch {
+      return [];
+    }
+  },
+
+  async getArtifacts(mode?: DataMode): Promise<Artifact[]> {
+    const currentMode = mode || getCurrentDataMode();
+    if (currentMode === 'demo') {
+      return [...mockArtifacts];
+    }
+    try {
+      const res = await safeFetch<{ artifacts: any[] }>(
+        `${BACKEND_URL}/api/artifacts`,
+        { method: 'GET' },
+        { artifacts: [] }
+      );
+      if (!res.artifacts || res.artifacts.length === 0) {
+        return [];
+      }
+      return res.artifacts.map((a) => ({
+        id: a.id,
+        runId: a.runId,
+        jobId: a.jobId,
+        jobName: a.jobId,
+        name: a.name,
+        size: a.size,
+        sizeBytes: a.sizeBytes,
+        type: a.type || 'binary',
+        createdAt: a.createdAt,
+        sha256: a.sha256 || '',
+        downloadUrl: a.downloadUrl,
+      }));
+    } catch {
+      return [];
+    }
+  },
+
+  async downloadArtifact(
+    runId: string,
+    jobId: string,
+    artifactName: string
+  ): Promise<void> {
+    const managementToken = localStorage.getItem('cicd_management_token');
+    const headers: Record<string, string> = {};
+    if (managementToken) {
+      headers['x-management-token'] = managementToken;
+    }
+
+    const downloadEndpoint = jobId
+      ? `${BACKEND_URL}/api/runs/${runId}/artifacts/${jobId}/${encodeURIComponent(artifactName)}/download`
+      : `${BACKEND_URL}/api/runs/${runId}/artifacts/${encodeURIComponent(artifactName)}/download`;
+
+    const res = await fetch(downloadEndpoint, {
+      method: 'GET',
+      headers,
+    });
+
+    if (!res.ok) {
+      let message = `Failed to download artifact (HTTP ${res.status})`;
+      try {
+        const errorJson = await res.json();
+        if (errorJson.error) message = errorJson.error;
+      } catch {
+        // fallback
+      }
+      throw new Error(message);
+    }
+
+    const disposition = res.headers.get('content-disposition');
+    let filename = artifactName;
+    if (disposition) {
+      const match = disposition.match(/filename="?([^";]+)"?/i);
+      if (match && match[1]) {
+        filename = match[1].trim();
+      }
+    }
+
+    const blob = await res.blob();
+    const objectUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    setTimeout(() => {
+      window.URL.revokeObjectURL(objectUrl);
+    }, 1000);
   },
 
   async getSecrets(): Promise<SecretItem[]> {
@@ -638,7 +778,29 @@ export const pipelineApi = {
     return [...mockIntegrations];
   },
 
-  async getRecentEvents(): Promise<RecentEvent[]> {
-    return [...mockRecentEvents];
+  async getRecentEvents(mode?: DataMode): Promise<RecentEvent[]> {
+    const currentMode = mode || getCurrentDataMode();
+    if (currentMode === 'demo') {
+      return [...mockRecentEvents];
+    }
+    return safeFetch<RecentEvent[]>(
+      `${BACKEND_URL}/api/events`,
+      { method: 'GET' },
+      [...mockRecentEvents]
+    );
+  },
+
+  async getWebhookDeliveries(mode?: DataMode): Promise<WebhookDeliveryItem[]> {
+    const currentMode = mode || getCurrentDataMode();
+    if (currentMode === 'demo') {
+      const readiness = await this.getIntegrationsReadiness('demo');
+      return readiness.recentDeliveries || [];
+    }
+    const res = await safeFetch<{ deliveries: WebhookDeliveryItem[]; total: number }>(
+      `${BACKEND_URL}/api/webhooks/deliveries`,
+      { method: 'GET' },
+      { deliveries: [], total: 0 }
+    );
+    return res.deliveries || [];
   }
 };

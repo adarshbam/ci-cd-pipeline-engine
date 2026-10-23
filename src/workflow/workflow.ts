@@ -81,6 +81,18 @@ export interface StepExecutionDetail extends StepExecutionResult {
   name: string;
 }
 
+export interface CommitStatusInfo {
+  state: "pending" | "success" | "failure" | "unavailable";
+  context: string;
+  description: string;
+  reportedAt?: string;
+  updatedAt?: string;
+  commitUrl?: string;
+  url?: string;
+  targetUrl?: string;
+  error?: string;
+}
+
 export interface PipelineRun {
   id: string;
   pipelineId: string;
@@ -92,6 +104,10 @@ export interface PipelineRun {
   finishedAt?: Date;
   branch?: string;
   environment?: Environment;
+  commitSha?: string;
+  repository?: string;
+  deliveryId?: string;
+  commitStatus?: CommitStatusInfo;
 }
 
 export interface JobRun {

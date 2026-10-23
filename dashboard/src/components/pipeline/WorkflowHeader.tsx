@@ -14,7 +14,7 @@ import {
   Layers,
   Clock,
   Calendar,
-  Sparkles
+  ExternalLink
 } from 'lucide-react';
 import { PipelineRun } from '../../types';
 import { Button } from '../ui/Button';
@@ -29,6 +29,7 @@ export interface WorkflowHeaderProps {
   onPause: () => void;
   onCancel: () => void;
   isActionLoading?: boolean;
+  artifactCount?: number;
 }
 
 export const WorkflowHeader: React.FC<WorkflowHeaderProps> = ({
@@ -39,6 +40,7 @@ export const WorkflowHeader: React.FC<WorkflowHeaderProps> = ({
   onPause,
   onCancel,
   isActionLoading = false,
+  artifactCount
 }) => {
   const navigate = useNavigate();
   const [copiedSha, setCopiedSha] = useState(false);
@@ -53,97 +55,156 @@ export const WorkflowHeader: React.FC<WorkflowHeaderProps> = ({
   const tabs = [
     { id: 'overview', label: 'Overview' },
     { id: 'logs', label: 'Logs' },
-    { id: 'artifacts', label: 'Artifacts', count: 4 },
+    { id: 'artifacts', label: 'Artifacts', count: artifactCount !== undefined ? artifactCount : 4 },
     { id: 'environments', label: 'Environments', count: 3 },
     { id: 'settings', label: 'Settings' },
   ];
 
   return (
     <div className="space-y-4 mb-6">
-      {/* Top Breadcrumb & Action Row */}
+      {/* Top Header Row */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         {/* Left: Back button & Title Info */}
-        <div className="flex items-start gap-3.5">
+        <div className="flex items-start gap-3">
           <button
             onClick={() => navigate('/workflows')}
-            className="mt-1 p-1.5 rounded-xl text-slate-400 hover:text-white bg-[#0e172a] hover:bg-[#14233f] border border-[#1b2b48] transition-colors"
+            className="mt-1 p-1.5 rounded-md text-[#A1A1AA] hover:text-[#F4F4F5] bg-[#16181D] hover:bg-[#20222A] border border-[#27272A] transition-colors"
             title="Back to workflows"
           >
             <ArrowLeft className="w-4 h-4" />
           </button>
 
           <div>
-            <div className="flex flex-wrap items-center gap-2.5">
-              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white font-mono">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-xl font-bold tracking-tight text-[#F4F4F5] font-mono">
                 {run.workflowName}
               </h1>
 
               {/* Branch Badge */}
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#0e192f] border border-[#1b2c4e] text-slate-300 text-xs font-mono">
-                <GitBranch className="w-3.5 h-3.5 text-sky-400" />
+              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#16181D] border border-[#27272A] text-[#D4D4D8] text-xs font-mono">
+                <GitBranch className="w-3.5 h-3.5 text-[#3B82F6]" />
                 <span>{run.branch}</span>
               </div>
 
-              {/* Commit SHA Badge with copy button */}
+              {/* Commit SHA Badge */}
               <div
                 onClick={copyShaToClipboard}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#0e192f] border border-[#1b2c4e] text-slate-300 text-xs font-mono cursor-pointer hover:border-slate-500 transition-colors"
+                className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#16181D] border border-[#27272A] text-[#A1A1AA] hover:text-[#F4F4F5] hover:border-[#383B46] text-xs font-mono cursor-pointer transition-colors"
                 title="Click to copy commit SHA"
               >
-                <GitCommit className="w-3.5 h-3.5 text-slate-400" />
+                <GitCommit className="w-3.5 h-3.5 text-[#71717A]" />
                 <span>{run.commitSha}</span>
                 {copiedSha ? (
-                  <Check className="w-3 h-3 text-emerald-400" />
+                  <Check className="w-3 h-3 text-[#10B981]" />
                 ) : (
-                  <Copy className="w-3 h-3 text-slate-500" />
+                  <Copy className="w-3 h-3 text-[#71717A]" />
                 )}
               </div>
+
+              {/* GitHub Commit Status Badge */}
+              {run.commitStatus ? (
+                <div
+                  className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-mono border ${
+                    run.commitStatus.state === 'success'
+                      ? 'bg-[#0D1F17] text-[#34D399] border-[#164E35]'
+                      : run.commitStatus.state === 'pending'
+                      ? 'bg-[#0E1B2E] text-[#60A5FA] border-[#1D3557]'
+                      : run.commitStatus.state === 'failure'
+                      ? 'bg-[#241215] text-[#F87171] border-[#4C1D24]'
+                      : 'bg-[#18191E] text-[#A1A1AA] border-[#27272A]'
+                  }`}
+                  title={`${run.commitStatus.context}: ${run.commitStatus.description}`}
+                >
+                  <span className="text-[#71717A] font-sans">GitHub:</span>
+                  <span className="font-bold uppercase text-[10px]">
+                    {run.commitStatus.state}
+                  </span>
+                  {(run.commitStatus.url || run.commitStatus.commitUrl) && (
+                    <a
+                      href={run.commitStatus.url || run.commitStatus.commitUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="ml-0.5 text-[#3B82F6] hover:text-[#60A5FA] flex items-center"
+                      title="Open commit on GitHub"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  )}
+                </div>
+              ) : run.repository && run.commitSha && run.commitSha !== 'HEAD' ? (
+                <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#16181D] border border-[#27272A] text-[#71717A] text-xs font-mono">
+                  <span>GitHub:</span>
+                  <span className="text-[#A1A1AA]">custom-ci/pipeline</span>
+                  <a
+                    href={`https://github.com/${run.repository}/commit/${run.commitSha}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="ml-0.5 text-[#3B82F6] hover:text-[#60A5FA]"
+                    title="Open on GitHub"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              ) : null}
+
+              {/* Run vs Preview Mode indicator */}
+              {run.isIdlePreview ? (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#16181D] border border-[#27272A] text-[#3B82F6] text-[11px] font-mono">
+                  Preview Mode
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#0D1F17] border border-[#164E35] text-[#34D399] text-[11px] font-mono">
+                  Run Execution
+                </span>
+              )}
             </div>
 
-            <p className="text-xs sm:text-sm text-slate-400 mt-1">
-              Production deployment pipeline for web application
+            <p className="text-xs text-[#A1A1AA] mt-1">
+              {run.isIdlePreview
+                ? 'Workflow definition topology preview. Jobs are idle until triggered.'
+                : 'Execution run for web application and integration tests'}
             </p>
 
-            {/* Meta Tags Row matching screenshot */}
-            <div className="flex flex-wrap items-center gap-3 mt-2.5 text-xs text-slate-400">
-              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#0d1627] border border-[#1a2744]">
+            {/* Meta Tags Row */}
+            <div className="flex flex-wrap items-center gap-2 mt-2 text-xs text-[#71717A] font-mono">
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#141519] border border-[#27272A]">
                 {run.trigger}
               </span>
-              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#0d1627] border border-[#1a2744]">
-                <Layers className="w-3 h-3 text-sky-400" />
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#141519] border border-[#27272A]">
+                <Layers className="w-3 h-3 text-[#3B82F6]" />
                 {run.totalJobs} jobs
               </span>
-              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#0d1627] border border-[#1a2744]">
-                <Clock className="w-3 h-3 text-emerald-400" />
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#141519] border border-[#27272A]">
+                <Clock className="w-3 h-3 text-[#10B981]" />
                 {run.duration}
               </span>
-              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#0d1627] border border-[#1a2744]">
-                <Calendar className="w-3 h-3 text-slate-400" />
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#141519] border border-[#27272A]">
+                <Calendar className="w-3 h-3 text-[#71717A]" />
                 {run.startedAt}
               </span>
             </div>
           </div>
         </div>
 
-        {/* Right: Workflow Dropdown & Action Buttons matching screenshot */}
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3 lg:self-start">
-          {/* Action Buttons Group */}
-          <div className="flex items-center gap-2">
-            {/* Workflow selector box matching screenshot */}
+        {/* Right: Operational Actions & Status */}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 lg:self-start flex-wrap">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Workflow selector */}
             <div className="relative hidden md:block">
               <button
                 onClick={() => setShowWorkflowDropdown(!showWorkflowDropdown)}
-                className="flex flex-col text-left px-3 py-1 bg-[#0b1220] hover:bg-[#111c30] border border-[#1b2b48] rounded-xl text-xs transition-colors select-none"
+                className="flex flex-col text-left px-2.5 py-1 bg-[#16181D] hover:bg-[#20222A] border border-[#27272A] rounded-md text-xs transition-colors select-none"
               >
-                <span className="text-[10px] text-slate-400 leading-none mb-0.5">Workflow</span>
-                <span className="font-bold text-slate-100 font-mono flex items-center gap-1.5 leading-tight">
+                <span className="text-[10px] text-[#71717A] leading-none mb-0.5">Workflow</span>
+                <span className="font-semibold text-[#F4F4F5] font-mono flex items-center gap-1 leading-tight">
                   {run.workflowName}
-                  <ChevronDown className="w-3 h-3 text-slate-400" />
+                  <ChevronDown className="w-3 h-3 text-[#71717A]" />
                 </span>
               </button>
             </div>
 
-            {/* Rerun Button (Emerald from screenshot) */}
+            {/* Rerun Button */}
             <Button
               variant="primary"
               size="sm"
@@ -164,7 +225,7 @@ export const WorkflowHeader: React.FC<WorkflowHeaderProps> = ({
               Pause
             </Button>
 
-            {/* Cancel Run Button (Red Outline from screenshot) */}
+            {/* Cancel Run Button */}
             <Button
               variant="danger"
               size="sm"
@@ -174,19 +235,19 @@ export const WorkflowHeader: React.FC<WorkflowHeaderProps> = ({
               Cancel Run
             </Button>
 
-            <button className="p-2 rounded-xl bg-[#0e172a] hover:bg-[#14233f] border border-[#1c2b48] text-slate-400 hover:text-white transition-colors">
+            <button className="p-1.5 rounded-md bg-[#16181D] hover:bg-[#20222A] border border-[#27272A] text-[#71717A] hover:text-[#F4F4F5] transition-colors">
               <MoreHorizontal className="w-4 h-4" />
             </button>
           </div>
 
           {/* Status Display on far right */}
-          <div className="flex items-center gap-2.5 pl-2 sm:border-l border-[#1b2b48]">
+          <div className="flex items-center gap-2.5 pl-2 sm:border-l border-[#27272A]">
             <StatusBadge status={run.status} size="sm" />
             <div className="text-right hidden sm:block">
-              <span className="text-[11px] text-slate-400 block font-mono">
-                Started 10:24 AM
+              <span className="text-[11px] text-[#A1A1AA] block font-mono">
+                {run.isIdlePreview ? 'Ready to run' : run.startedAt ? `Started ${run.startedAt}` : 'Started recently'}
               </span>
-              <span className="text-[10px] text-slate-500 block">
+              <span className="text-[10px] text-[#71717A] block">
                 {run.elapsedTime}
               </span>
             </div>
@@ -194,7 +255,7 @@ export const WorkflowHeader: React.FC<WorkflowHeaderProps> = ({
         </div>
       </div>
 
-      {/* Navigation Tabs Bar matching screenshot */}
+      {/* Underline Tabs */}
       <Tabs
         items={tabs}
         activeTab={activeTab}

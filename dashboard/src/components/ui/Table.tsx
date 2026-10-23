@@ -29,23 +29,23 @@ export function Table<T>({
     <div className={`w-full overflow-x-auto ${className}`}>
       <table className="w-full text-left border-collapse text-xs">
         <thead>
-          <tr className="border-b border-[#1a2744] text-slate-400 font-medium">
+          <tr className="border-b border-[#27272A] text-[#71717A]">
             {columns.map((col, idx) => (
               <th
                 key={idx}
-                className={`py-3 px-3.5 first:pl-4 last:pr-4 uppercase text-[11px] tracking-wider text-slate-400/90 select-none ${col.headerClassName || ''}`}
+                className={`py-2.5 px-3.5 first:pl-4 last:pr-4 uppercase text-[11px] font-medium tracking-wider select-none ${col.headerClassName || ''}`}
               >
                 {col.header}
               </th>
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-[#152037]">
+        <tbody className="divide-y divide-[#1E2026]">
           {data.length === 0 ? (
             <tr>
               <td
                 colSpan={columns.length}
-                className="py-8 text-center text-slate-500 font-medium"
+                className="py-8 text-center text-[#71717A] font-normal"
               >
                 {emptyMessage}
               </td>
@@ -55,12 +55,12 @@ export function Table<T>({
               <tr
                 key={keyExtractor(row, rowIdx)}
                 onClick={() => onRowClick?.(row)}
-                className={`group transition-colors duration-150 hover:bg-[#121c32]/70 ${onRowClick ? 'cursor-pointer' : ''}`}
+                className={`group transition-colors duration-150 hover:bg-[#16181F] ${onRowClick ? 'cursor-pointer' : ''}`}
               >
                 {columns.map((col, colIdx) => (
                   <td
                     key={colIdx}
-                    className={`py-3 px-3.5 first:pl-4 last:pr-4 text-slate-300 align-middle ${col.className || ''}`}
+                    className={`py-3 px-3.5 first:pl-4 last:pr-4 text-[#D4D4D8] align-middle ${col.className || ''}`}
                   >
                     {col.cell
                       ? col.cell(row, rowIdx)

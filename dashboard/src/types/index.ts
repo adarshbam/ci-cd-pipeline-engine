@@ -4,7 +4,8 @@ export type JobStatus =
   | 'queued'
   | 'failed'
   | 'skipped'
-  | 'cancelled';
+  | 'cancelled'
+  | 'idle';
 
 export type JobIconType =
   | 'webhook'
@@ -78,6 +79,18 @@ export interface PipelineRun {
   elapsedTime: string;
   environment?: string;
   jobs: Job[];
+  isIdlePreview?: boolean;
+  repository?: string;
+  deliveryId?: string;
+  commitStatus?: {
+    state: 'pending' | 'success' | 'failure' | 'unavailable';
+    context: string;
+    description: string;
+    url?: string;
+    commitUrl?: string;
+    targetUrl?: string;
+    updatedAt?: string;
+  };
 }
 
 export interface Workflow {
@@ -111,10 +124,13 @@ export interface Environment {
 
 export interface Artifact {
   id: string;
+  runId?: string;
   name: string;
   size: string;
-  type: 'tar' | 'zip' | 'docker' | 'report' | 'binary';
+  sizeBytes?: number;
+  type: 'tar' | 'zip' | 'docker' | 'report' | 'binary' | 'directory';
   jobName: string;
+  jobId?: string;
   createdAt: string;
   downloadUrl?: string;
   sha256: string;
@@ -260,6 +276,18 @@ export interface WebhookDeliveryItem {
   commitSha: string;
   timestamp: string;
   status: 'accepted' | 'rejected' | 'skipped';
+  validationOutcome?: string;
+  outcomeReason?: string;
+  runId?: string;
+  commitStatus?: {
+    state: 'pending' | 'success' | 'failure' | 'unavailable';
+    context: string;
+    description: string;
+    url?: string;
+    commitUrl?: string;
+    targetUrl?: string;
+    updatedAt?: string;
+  };
 }
 
 export interface IntegrationsReadiness {
@@ -300,6 +328,8 @@ export function mapBackendStatus(status?: string): JobStatus {
       return 'cancelled';
     case 'SKIPPED':
       return 'skipped';
+    case 'IDLE':
+      return 'idle';
     case 'QUEUED':
     default:
       return 'queued';
