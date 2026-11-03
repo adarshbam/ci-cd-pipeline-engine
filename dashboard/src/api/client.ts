@@ -8,6 +8,7 @@ import {
   Metrics,
   RecentEvent,
   Job,
+  StepDetail,
   JobLogEntry,
   EngineStatus,
   DataMode,
@@ -54,6 +55,26 @@ export function formatDuration(durationMs?: number): string {
   return `${min}m ${sec}s`;
 }
 
+function mapBackendSteps(stepResults: any[] | undefined): StepDetail[] | undefined {
+  if (!Array.isArray(stepResults)) return undefined;
+  return stepResults.map((s: any) => {
+    const durMs =
+      s.finishedAt && s.startedAt
+        ? Math.max(0, new Date(s.finishedAt).getTime() - new Date(s.startedAt).getTime())
+        : undefined;
+    return {
+      name: s.name || 'Step',
+      status: mapBackendStatus(s.status),
+      duration: durMs !== undefined ? formatDuration(durMs) : '0s',
+      startedAt: s.startedAt,
+      finishedAt: s.finishedAt,
+      exitCode: s.exitCode,
+      stdout: s.stdout,
+      stderr: s.stderr
+    };
+  });
+}
+
 async function safeFetch<T>(
   url: string,
   options?: RequestInit,
@@ -78,7 +99,18 @@ async function safeFetch<T>(
     });
     if (!res.ok) {
       if (fallback !== undefined) return fallback;
-      throw new Error(`API error ${res.status}: ${res.statusText}`);
+      let errMsg = `API error ${res.status}: ${res.statusText}`;
+      try {
+        const errBody = await res.json();
+        if (errBody?.error) {
+          errMsg = Array.isArray(errBody.validationErrors) && errBody.validationErrors.length > 0
+            ? `${errBody.error}: ${errBody.validationErrors.join('; ')}`
+            : errBody.error;
+        }
+      } catch {
+        // Ignore JSON parse failure on error body
+      }
+      throw new Error(errMsg);
     }
     return (await res.json()) as T;
   } catch (err) {
@@ -122,27 +154,42 @@ export const pipelineApi = {
       );
 
       if (Array.isArray(backendWorkflows)) {
-        return backendWorkflows.map((bw) => ({
-          id: bw.name,
-          name: bw.name,
-          slug: bw.name,
-          description: `Configured webhook: ${bw.webhook.url} • [${(bw.webhook.methods || ['POST']).join(', ')}]`,
-          repository:
-            bw.trigger?.allowedRepositories?.[0] || 'Local Repository',
-          defaultBranch: bw.trigger?.allowedBranches?.[0] || 'main',
-          lastRunStatus: bw.lastRun ? mapBackendStatus(bw.lastRun.status) : 'queued',
-          lastRunTime: bw.lastRun?.finishedAt
-            ? new Date(bw.lastRun.finishedAt).toLocaleTimeString()
-            : bw.lastRun?.startedAt
-            ? 'Running'
-            : 'Never executed',
-          triggers: (bw.trigger?.events as any) || ['push'],
-          activeRunsCount: 0,
-          successRate: bw.isValid ? 100 : 0,
-          avgDuration: bw.lastRun?.durationMs ? formatDuration(bw.lastRun.durationMs) : 'N/A',
-          totalRuns: bw.runsCount || 0,
-          yamlConfig: JSON.stringify(bw, null, 2)
-        }));
+        return backendWorkflows.map((bw) => {
+          const completed =
+            (bw.metrics?.successfulRuns || 0) + (bw.metrics?.failedRuns || 0);
+          const computedSuccessRate =
+            completed > 0
+              ? Math.round(((bw.metrics?.successfulRuns || 0) / completed) * 100)
+              : bw.isValid
+              ? 100
+              : 0;
+          const avgMs =
+            bw.metrics?.averageDurationMs ||
+            bw.metrics?.avgDurationMs ||
+            bw.lastRun?.durationMs;
+
+          return {
+            id: bw.name,
+            name: bw.name,
+            slug: bw.name,
+            description: `Configured webhook: ${bw.webhook.url} • [${(bw.webhook.methods || ['POST']).join(', ')}]`,
+            repository:
+              bw.trigger?.allowedRepositories?.[0] || 'Local Repository',
+            defaultBranch: bw.trigger?.allowedBranches?.[0] || 'main',
+            lastRunStatus: bw.lastRun ? mapBackendStatus(bw.lastRun.status) : 'queued',
+            lastRunTime: bw.lastRun?.finishedAt
+              ? new Date(bw.lastRun.finishedAt).toLocaleTimeString()
+              : bw.lastRun?.startedAt
+              ? 'Running'
+              : 'Never executed',
+            triggers: (bw.trigger?.events as any) || ['push'],
+            activeRunsCount: bw.activeRunsCount ?? 0,
+            successRate: computedSuccessRate,
+            avgDuration: avgMs ? formatDuration(avgMs) : 'N/A',
+            totalRuns: bw.runsCount || 0,
+            yamlConfig: JSON.stringify(bw, null, 2)
+          };
+        });
       }
     } catch {
       // Backend offline or unreachable
@@ -277,10 +324,14 @@ export const pipelineApi = {
           runNumber: data.runs.length - idx,
           status: mapBackendStatus(br.status),
           branch: br.branch || 'main',
-          commitSha: br.id.slice(0, 7),
-          commitMessage: `Execution run ${br.id.slice(0, 8)}`,
-          author: { name: 'Engine Operator', username: 'local-runner' },
-          trigger: 'push / manual',
+          commitSha: br.commitSha ? br.commitSha.slice(0, 7) : br.id.slice(0, 7),
+          commitMessage: br.commitSha
+            ? `Push commit ${br.commitSha.slice(0, 7)} on ${br.branch || 'main'}`
+            : `Execution run ${br.id.slice(0, 8)}`,
+          author: br.deliveryId
+            ? { name: 'GitHub Webhook', username: 'github' }
+            : { name: 'Engine Operator', username: 'local-runner' },
+          trigger: br.deliveryId ? `GitHub Push (${br.deliveryId.slice(0, 8)})` : 'push / manual',
           totalJobs: br.jobCount || Object.keys(br.jobs || {}).length,
           duration: br.durationMs
             ? formatDuration(br.durationMs)
@@ -290,28 +341,35 @@ export const pipelineApi = {
           startedAt: br.startedAt ? new Date(br.startedAt).toLocaleTimeString() : 'Recently',
           elapsedTime: br.finishedAt ? 'Completed' : 'Running',
           environment: br.environment,
-          jobs: Object.values(br.jobs || {}).map((j: any) => ({
-            id: j.jobId,
-            runId: br.id,
-            name: j.jobId,
-            status: mapBackendStatus(j.status),
-            duration: formatDuration(j.durationMs),
-            startedAt: j.startedAt,
-            completedAt: j.finishedAt,
-            iconType: j.jobId.includes('test')
-              ? 'test'
-              : j.jobId.includes('lint')
-              ? 'lint'
-              : j.jobId.includes('build')
-              ? 'build'
-              : j.jobId.includes('deploy')
-              ? 'deploy'
-              : 'custom',
-            exitCode: j.exitCode,
-            failureReason: j.failureReason,
-            steps: j.stepResults,
-            dependsOn: j.needs || []
-          }))
+          jobs: Object.values(br.jobs || {}).map((j: any) => {
+            const mappedSteps = mapBackendSteps(j.stepResults);
+            return {
+              id: j.jobId,
+              runId: br.id,
+              name: j.jobId,
+              status: mapBackendStatus(j.status),
+              duration: formatDuration(j.durationMs),
+              startedAt: j.startedAt,
+              completedAt: j.finishedAt,
+              stepCount: mappedSteps ? mappedSteps.length : undefined,
+              completedSteps: mappedSteps
+                ? mappedSteps.filter((s) => s.status === 'success').length
+                : undefined,
+              iconType: j.jobId.includes('test')
+                ? 'test'
+                : j.jobId.includes('lint')
+                ? 'lint'
+                : j.jobId.includes('build')
+                ? 'build'
+                : j.jobId.includes('deploy')
+                ? 'deploy'
+                : 'custom',
+              exitCode: j.exitCode,
+              failureReason: j.failureReason,
+              steps: mappedSteps,
+              dependsOn: j.needs || []
+            };
+          })
         }));
       }
     } catch {
@@ -371,28 +429,35 @@ export const pipelineApi = {
           commitStatus: br.commitStatus,
           failureReason: br.failureReason,
           isIdlePreview: false,
-          jobs: Object.values(br.jobs || {}).map((j: any) => ({
-            id: j.jobId,
-            runId: br.runId,
-            name: j.jobId,
-            status: mapBackendStatus(j.status),
-            duration: formatDuration(j.durationMs),
-            startedAt: j.startedAt,
-            completedAt: j.finishedAt,
-            iconType: j.jobId.includes('test')
-              ? 'test'
-              : j.jobId.includes('lint')
-              ? 'lint'
-              : j.jobId.includes('build')
-              ? 'build'
-              : j.jobId.includes('deploy')
-              ? 'deploy'
-              : 'custom',
-            exitCode: j.exitCode,
-            failureReason: j.failureReason,
-            steps: j.stepResults,
-            dependsOn: j.needs || []
-          }))
+          jobs: Object.values(br.jobs || {}).map((j: any) => {
+            const mappedSteps = mapBackendSteps(j.stepResults);
+            return {
+              id: j.jobId,
+              runId: br.runId,
+              name: j.jobId,
+              status: mapBackendStatus(j.status),
+              duration: formatDuration(j.durationMs),
+              startedAt: j.startedAt,
+              completedAt: j.finishedAt,
+              stepCount: mappedSteps ? mappedSteps.length : undefined,
+              completedSteps: mappedSteps
+                ? mappedSteps.filter((s) => s.status === 'success').length
+                : undefined,
+              iconType: j.jobId.includes('test')
+                ? 'test'
+                : j.jobId.includes('lint')
+                ? 'lint'
+                : j.jobId.includes('build')
+                ? 'build'
+                : j.jobId.includes('deploy')
+                ? 'deploy'
+                : 'custom',
+              exitCode: j.exitCode,
+              failureReason: j.failureReason,
+              steps: mappedSteps,
+              dependsOn: j.needs || []
+            };
+          })
         };
       }
     } catch {
@@ -432,12 +497,15 @@ export const pipelineApi = {
           elapsedTime: 'Not run',
           jobs: jobKeys.map((jk) => {
             const jDef = wf.jobs[jk];
+            const defStepCount = Array.isArray(jDef?.steps) ? jDef.steps.length : 1;
             return {
               id: jk,
               runId: `preview-${wf.name}`,
               name: jk,
               status: 'idle',
               duration: 'Not run',
+              stepCount: defStepCount,
+              completedSteps: 0,
               iconType: jk.includes('test')
                 ? 'test'
                 : jk.includes('lint')
@@ -469,9 +537,10 @@ export const pipelineApi = {
     webhookUrl?: string
   ): Promise<JobLogEntry[]> {
     try {
+      const encodedRunId = encodeURIComponent(runId);
       const url = webhookUrl
-        ? `${BACKEND_URL}${webhookUrl}/runs/${runId}/logs`
-        : `${BACKEND_URL}/api/runs/${runId}/logs`;
+        ? `${BACKEND_URL}${webhookUrl}/runs/${encodedRunId}/logs`
+        : `${BACKEND_URL}/api/runs/${encodedRunId}/logs`;
 
       const queryParams = new URLSearchParams();
       if (jobId) queryParams.set('jobId', jobId);
@@ -505,17 +574,22 @@ export const pipelineApi = {
     webhookUrl?: string
   ): Promise<{ success: boolean; message: string; run?: any }> {
     try {
+      const encodedRunId = encodeURIComponent(runId);
       const url = webhookUrl
-        ? `${BACKEND_URL}${webhookUrl}/runs/${runId}/cancel`
-        : `${BACKEND_URL}/api/runs/${runId}/cancel`;
+        ? `${BACKEND_URL}${webhookUrl}/runs/${encodedRunId}/cancel`
+        : `${BACKEND_URL}/api/runs/${encodedRunId}/cancel`;
 
       const res = await safeFetch<any>(url, {
         method: 'POST'
       });
 
+      const wasCancelled = res?.cancelled !== false && res?.status === 'CANCELLED';
+
       return {
-        success: true,
-        message: `Pipeline run ${runId} cancelled successfully.`,
+        success: wasCancelled,
+        message: wasCancelled
+          ? `Pipeline run ${runId} cancelled successfully.`
+          : `Run ${runId} already completed (${res?.status || 'finished'}).`,
         run: res
       };
     } catch (err: any) {
@@ -787,7 +861,7 @@ export const pipelineApi = {
     return safeFetch<RecentEvent[]>(
       `${BACKEND_URL}/api/events`,
       { method: 'GET' },
-      [...mockRecentEvents]
+      []
     );
   },
 

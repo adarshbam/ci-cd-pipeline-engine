@@ -9,15 +9,15 @@
     "dev:all": "concurrently \"npm run dev\" \"npm run tunnel\"",
     "build": "tsc",
     "start": "node dist/server.js",
-    "test": "tsx --test src/tests/pipeline-engine.test.ts src/tests/pipeline-run.test.ts src/tests/pipeline-finalization.test.ts src/tests/metrics-collector.test.ts src/tests/pipeline-cancellation.test.ts src/tests/pipeline-cancellation-http.test.ts src/tests/milestone4-api.test.ts src/tests/milestone5-security.test.ts src/tests/run-persistence-recovery.test.ts src/tests/stress-concurrent-runs.test.ts",
+    "test": "tsx --test src/tests/pipeline-engine.test.ts src/tests/pipeline-run.test.ts src/tests/pipeline-finalization.test.ts src/tests/metrics-collector.test.ts src/tests/pipeline-cancellation.test.ts src/tests/pipeline-cancellation-http.test.ts src/tests/milestone4-api.test.ts src/tests/milestone5-security.test.ts src/tests/run-persistence-recovery.test.ts src/tests/stress-concurrent-runs.test.ts src/tests/qe-smoke-and-fuzz.test.ts",
     "test:security": "tsx src/tests/milestone5-security.test.ts",
     "test:persistence": "tsx src/tests/run-persistence-recovery.test.ts",
     "test:stress": "tsx src/tests/stress-concurrent-runs.test.ts",
     "test:regression": "tsx src/tests/day7-final-regression.test.ts",
     "test:all": "tsx src/tools/audit-all-tests.ts",
     "test:live": "tsx src/tests/day7-live-webhook.test.ts",
-    "dashboard:dev": "npm --prefix dashboard run dev",
-    "dashboard:build": "npm --prefix dashboard run build"
+    "dashboard:dev": "cd dashboard && node ./node_modules/vite/bin/vite.js",
+    "dashboard:build": "cd dashboard && node ./node_modules/typescript/bin/tsc -b && node ./node_modules/vite/bin/vite.js build"
   },
   "keywords": [
     "ci-cd",

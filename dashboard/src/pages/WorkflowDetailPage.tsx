@@ -8,7 +8,9 @@ import {
   Metrics,
   Environment,
   RecentEvent,
-  Artifact
+  Artifact,
+  JobLogEntry,
+  BackendWorkflowDetail
 } from '../types';
 import { WorkflowHeader } from '../components/pipeline/WorkflowHeader';
 import { ReactFlowDag } from '../components/pipeline/ReactFlowDag';
@@ -40,6 +42,8 @@ export const WorkflowDetailPage: React.FC = () => {
   const [environments, setEnvironments] = useState<Environment[]>([]);
   const [events, setEvents] = useState<RecentEvent[]>([]);
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
+  const [runLogs, setRunLogs] = useState<JobLogEntry[]>([]);
+  const [workflowDetail, setWorkflowDetail] = useState<BackendWorkflowDetail | null>(null);
   const [downloadingArtifactId, setDownloadingArtifactId] = useState<string | null>(null);
   const [artifactError, setArtifactError] = useState<string | null>(null);
 
@@ -87,8 +91,14 @@ export const WorkflowDetailPage: React.FC = () => {
 
         if (runData && runData.id) {
           try {
-            const artData = await pipelineApi.getRunArtifacts(runData.id, dataMode);
+            const [artData, wfDetail, logsData] = await Promise.all([
+              pipelineApi.getRunArtifacts(runData.id, dataMode),
+              pipelineApi.getWorkflowDetail(runData.workflowName || runData.workflowId, dataMode),
+              !runData.isIdlePreview ? pipelineApi.getRunLogs(runData.id) : Promise.resolve([])
+            ]);
             setArtifacts(artData);
+            setWorkflowDetail(wfDetail);
+            setRunLogs(logsData);
           } catch {
             // fallback
           }
@@ -106,11 +116,18 @@ export const WorkflowDetailPage: React.FC = () => {
 
     const interval = setInterval(async () => {
       try {
-        const updated = await pipelineApi.getRunById(run.id, dataMode);
+        const [updated, latestLogs] = await Promise.all([
+          pipelineApi.getRunById(run.id, dataMode),
+          !run.isIdlePreview ? pipelineApi.getRunLogs(run.id) : Promise.resolve([])
+        ]);
+        if (latestLogs.length > 0) {
+          setRunLogs(latestLogs);
+        }
         if (updated) {
           setRun(updated);
           if (updated.status !== 'running' && updated.status !== 'queued') {
             pipelineApi.getMetrics(dataMode).then((m) => m && setMetrics(m));
+            pipelineApi.getRunArtifacts(updated.id, dataMode).then((a) => setArtifacts(a)).catch(() => {});
           }
         }
       } catch {
@@ -162,15 +179,20 @@ export const WorkflowDetailPage: React.FC = () => {
     setIsActionLoading(true);
     try {
       const res = await pipelineApi.cancelRun(run.id);
-      setRun({
-        ...run,
-        status: 'cancelled',
-        jobs: run.jobs.map((j) =>
-          j.status === 'running' || j.status === 'queued'
-            ? { ...j, status: 'cancelled', failureReason: 'Cancelled by user' }
-            : j
-        ),
-      });
+      if (res.success) {
+        setRun({
+          ...run,
+          status: 'cancelled',
+          jobs: run.jobs.map((j) =>
+            j.status === 'running' || j.status === 'queued'
+              ? { ...j, status: 'cancelled', failureReason: 'Cancelled by user' }
+              : j
+          ),
+        });
+      } else {
+        const refreshed = await pipelineApi.getRunById(run.id, dataMode);
+        if (refreshed) setRun(refreshed);
+      }
       setActionNotice(res.message);
       setTimeout(() => setActionNotice(null), 4000);
     } finally {
@@ -251,6 +273,7 @@ export const WorkflowDetailPage: React.FC = () => {
         onCancel={() => setIsCancelModalOpen(true)}
         isActionLoading={isActionLoading}
         artifactCount={artifacts.length}
+        environmentCount={environments.length}
       />
 
       {/* Run Failure Diagnostic Alert Banner */}
@@ -405,7 +428,7 @@ export const WorkflowDetailPage: React.FC = () => {
             <div className="flex items-center gap-2">
               <Terminal className="w-4 h-4 text-[#3B82F6]" />
               <h3 className="text-xs font-semibold uppercase tracking-wider text-[#A1A1AA]">
-                Consolidated Engine Execution Logs
+                Consolidated Engine Execution Logs ({runLogs.length})
               </h3>
             </div>
             <span className="text-xs font-mono text-[#34D399] flex items-center gap-1.5">
@@ -414,25 +437,63 @@ export const WorkflowDetailPage: React.FC = () => {
             </span>
           </div>
           <div className="rounded-lg bg-[#0B0C0E] border border-[#27272A] p-3.5 font-mono text-xs text-[#D4D4D8] leading-relaxed max-h-[500px] overflow-y-auto space-y-1">
-            <div className="text-[#71717A]">--- Pipeline {run.workflowName} execution log ---</div>
-            <div className="text-[#60A5FA]">[10:24:01] [SETUP] Worker workspace created in OS temporary directory</div>
-            <div className="text-[#A1A1AA]">[10:24:04] [CHECKOUT] Triggered via push event for branch {run.branch}</div>
-            <div className="text-[#34D399]">[10:26:14] [BUILD] ✓ Build steps executed with exit code 0</div>
-            <div className="text-[#34D399]">[10:27:12] [LINT] ✓ Code style verification passed</div>
-            <div className="text-[#34D399]">[10:30:31] [TEST] ✓ Unit & integration tests settled</div>
-            {run.status === 'cancelled' ? (
-              <div className="text-[#FBBF24] font-medium">
-                [10:32:00] [CANCEL] Pipeline was cancelled by user. Terminated child process trees.
+            <div className="text-[#71717A]">
+              --- Pipeline {run.workflowName} ({run.id}) execution log ---
+            </div>
+            {run.isIdlePreview ? (
+              <div className="text-[#71717A] py-2">
+                Workflow is in preview mode. Trigger a pipeline run to view live execution logs.
               </div>
-            ) : run.status === 'failed' ? (
-              <div className="text-[#F87171] font-medium">
-                [10:32:45] [ERROR] Job failed with exit code 1
-              </div>
+            ) : runLogs.length > 0 ? (
+              runLogs.map((entry) => (
+                <div
+                  key={entry.id}
+                  className={
+                    entry.level === 'error'
+                      ? 'text-[#F87171]'
+                      : entry.level === 'warn'
+                      ? 'text-[#FBBF24]'
+                      : 'text-[#D4D4D8]'
+                  }
+                >
+                  <span className="text-[#71717A]">[{entry.timestamp}]</span>{' '}
+                  <span className="text-[#60A5FA]">[{entry.jobId.toUpperCase()}]</span>{' '}
+                  <span>{entry.message}</span>
+                </div>
+              ))
             ) : (
-              <div className="text-[#60A5FA] font-medium">
-                [10:32:45] [STATUS] Pipeline state: {run.status.toUpperCase()}
-              </div>
+              run.jobs.map((job) => (
+                <div key={job.id} className="space-y-0.5">
+                  <div className="text-[#60A5FA]">
+                    [{job.startedAt || run.startedAt}] [{job.name.toUpperCase()}] Status: {job.status.toUpperCase()} ({job.duration})
+                  </div>
+                  {job.steps?.map((step, sIdx) => (
+                    <div
+                      key={sIdx}
+                      className={
+                        step.status === 'failed'
+                          ? 'text-[#F87171] pl-4'
+                          : 'text-[#34D399] pl-4'
+                      }
+                    >
+                      ↳ {step.name}: {step.stdout || step.stderr || step.status}
+                    </div>
+                  ))}
+                </div>
+              ))
             )}
+            <div
+              className={
+                run.status === 'cancelled'
+                  ? 'text-[#FBBF24] font-medium pt-1'
+                  : run.status === 'failed'
+                  ? 'text-[#F87171] font-medium pt-1'
+                  : 'text-[#34D399] font-medium pt-1'
+              }
+            >
+              [FINAL] Pipeline state: {run.status.toUpperCase()}
+              {run.failureReason ? ` — ${run.failureReason}` : ''}
+            </div>
           </div>
         </Card>
       )}
@@ -558,7 +619,17 @@ export const WorkflowDetailPage: React.FC = () => {
               >
                 <div className="flex items-center justify-between">
                   <h4 className="text-xs font-semibold text-[#F4F4F5]">{env.name}</h4>
-                  <span className="text-[10px] text-[#34D399] px-1.5 py-0.5 rounded bg-[#0D1F17] border border-[#164E35] font-mono">
+                  <span
+                    className={`text-[10px] px-1.5 py-0.5 rounded border font-mono ${
+                      env.status === 'healthy'
+                        ? 'text-[#34D399] bg-[#0D1F17] border-[#164E35]'
+                        : env.status === 'error'
+                        ? 'text-[#F87171] bg-[#241215] border-[#4C1D24]'
+                        : env.status === 'deploying'
+                        ? 'text-[#60A5FA] bg-[#0E1B2E] border-[#1D3557]'
+                        : 'text-[#A1A1AA] bg-[#18191E] border-[#27272A]'
+                    }`}
+                  >
                     {env.status}
                   </span>
                 </div>
@@ -566,7 +637,10 @@ export const WorkflowDetailPage: React.FC = () => {
                   Branch: <span className="text-[#D4D4D8]">{env.targetBranch || 'main'}</span>
                 </div>
                 <div className="text-xs text-[#71717A] font-mono">
-                  Health Check: <span className="text-[#10B981]">{env.healthScore || 100}%</span>
+                  Health Check:{' '}
+                  <span className={env.status === 'error' ? 'text-[#F87171]' : 'text-[#10B981]'}>
+                    {env.healthScore ?? 100}%
+                  </span>
                 </div>
               </div>
             ))}
@@ -586,19 +660,49 @@ export const WorkflowDetailPage: React.FC = () => {
               <input
                 type="text"
                 readOnly
-                value={`http://localhost:3000/github/ci-cd`}
+                value={`http://localhost:3000${workflowDetail?.workflow?.webhook?.url || `/webhooks/${run.workflowName}`}`}
                 className="w-full bg-[#0B0C0E] border border-[#27272A] rounded-md px-3 py-1.5 text-[#F4F4F5] font-mono text-xs focus:outline-none"
               />
             </div>
-            <div>
-              <label className="block text-[#D4D4D8] font-medium mb-1">Trigger Events</label>
-              <div className="flex gap-2">
-                <span className="px-2 py-0.5 rounded bg-[#16181D] text-[#3B82F6] border border-[#27272A] font-mono text-[11px]">
-                  push
-                </span>
-                <span className="px-2 py-0.5 rounded bg-[#16181D] text-[#3B82F6] border border-[#27272A] font-mono text-[11px]">
-                  pull_request
-                </span>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-[#D4D4D8] font-medium mb-1">Trigger Events</label>
+                <div className="flex flex-wrap gap-2">
+                  {(workflowDetail?.workflow?.trigger?.events || ['push']).map((evt) => (
+                    <span
+                      key={evt}
+                      className="px-2 py-0.5 rounded bg-[#16181D] text-[#3B82F6] border border-[#27272A] font-mono text-[11px]"
+                    >
+                      {evt}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="block text-[#D4D4D8] font-medium mb-1">Allowed HTTP Methods</label>
+                <div className="flex flex-wrap gap-2">
+                  {(workflowDetail?.workflow?.webhook?.methods || ['POST']).map((method) => (
+                    <span
+                      key={method}
+                      className="px-2 py-0.5 rounded bg-[#16181D] text-[#D4D4D8] border border-[#27272A] font-mono text-[11px]"
+                    >
+                      {method}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="block text-[#D4D4D8] font-medium mb-1">Allowed Branches</label>
+                <div className="flex flex-wrap gap-2">
+                  {(workflowDetail?.workflow?.trigger?.allowedBranches || ['main', 'develop']).map((branch) => (
+                    <span
+                      key={branch}
+                      className="px-2 py-0.5 rounded bg-[#16181D] text-[#34D399] border border-[#27272A] font-mono text-[11px]"
+                    >
+                      {branch}
+                    </span>
+                  ))}
+                </div>
               </div>
             </div>
           </div>

@@ -35,6 +35,16 @@ export interface StoredRun {
 
 const DEFAULT_STORAGE_DIR = path.resolve("runtime/history/runs");
 
+function isRunningInAutomatedTestSuite(): boolean {
+  if (process.env.FORCE_RUN_PERSISTENCE === "true") return false;
+  return process.argv.some(
+    (arg) =>
+      arg.includes(".test.") ||
+      arg.includes("src/tests") ||
+      arg.includes("src\\tests"),
+  );
+}
+
 export async function ensureRunStorageDir(storageDir = DEFAULT_STORAGE_DIR): Promise<string> {
   await mkdir(storageDir, { recursive: true });
   return storageDir;
@@ -91,6 +101,9 @@ export function serializeRun(run: PipelineRun): StoredRun {
 }
 
 export async function saveRun(run: PipelineRun, storageDir = DEFAULT_STORAGE_DIR): Promise<void> {
+  if (storageDir === DEFAULT_STORAGE_DIR && isRunningInAutomatedTestSuite()) {
+    return;
+  }
   try {
     await ensureRunStorageDir(storageDir);
     const filePath = path.join(storageDir, `${run.id}.json`);

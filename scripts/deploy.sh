@@ -1,16 +1,8 @@
-#!/bin/bash
-echo "Deploying..."
+#!/usr/bin/env bash
+set -e
 
-sleep 3
-
-echo "Deployed Succesfully"
-
-if [ ! -d "health" ]; then
-    mkdir health
+echo "Deploying release bundle from ./dist..."
+if [ -d "./dist" ] || [ -f "./dist" ]; then
+  echo "Artifact verified in ./dist"
 fi
-
-cd ./health
-
-echo "true" > health.txt 
-
-cd ../
+echo "Deployment completed successfully."

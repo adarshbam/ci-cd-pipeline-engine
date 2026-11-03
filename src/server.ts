@@ -1,7 +1,6 @@
 import express from "express";
 import type { Request, Response } from "express";
-import "fs/promises";
-import { readdir } from "fs/promises";
+import { existsSync } from "node:fs";
 import path from "path";
 import { PORT } from "./config/config.js";
 import { loadWorkflows } from "./workflow/workflow-loader.js";
@@ -41,13 +40,44 @@ app.get("/", (req: Request, res: Response) => {
 
 const workflows: Workflow[] = await loadWorkflows();
 
-const webhookRouter = createWebhookRouter(workflows);
+const webhookRouter = createWebhookRouter(workflows, { restoreHistory: true });
 
 app.use(webhookRouter);
 
 // Serve Dashboard dist static files if built
 const dashboardDist = path.resolve("dashboard/dist");
+const dashboardIndex = path.join(dashboardDist, "index.html");
 app.use(express.static(dashboardDist));
+
+// Unmatched /api/* routes return clean JSON 404
+app.use("/api", (_req: Request, res: Response) => {
+  res.status(404).json({ error: "API endpoint not found" });
+});
+
+// SPA fallback for client-side React Router routes
+const SPA_PREFIXES = [
+  "/dashboard",
+  "/workflows",
+  "/runs",
+  "/artifacts",
+  "/integrations",
+  "/deployments",
+  "/secrets",
+  "/settings",
+];
+
+app.use((req: Request, res: Response, next) => {
+  if (
+    req.method === "GET" &&
+    existsSync(dashboardIndex) &&
+    SPA_PREFIXES.some(
+      (prefix) => req.path === prefix || req.path.startsWith(`${prefix}/`),
+    )
+  ) {
+    return res.sendFile(dashboardIndex);
+  }
+  next();
+});
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

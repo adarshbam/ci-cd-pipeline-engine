@@ -123,7 +123,11 @@ export const JobsTable: React.FC<JobsTableProps> = ({
                       >
                         Inspect
                       </button>
-                      <button className="text-[#71717A] hover:text-[#F4F4F5] p-1 rounded hover:bg-[#1E2026]">
+                      <button
+                        onClick={() => onSelectJob(job)}
+                        title="Open job inspector"
+                        className="text-[#71717A] hover:text-[#F4F4F5] p-1 rounded hover:bg-[#1E2026]"
+                      >
                         <MoreHorizontal className="w-3.5 h-3.5" />
                       </button>
                     </div>

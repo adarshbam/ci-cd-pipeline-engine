@@ -428,6 +428,22 @@ export const WorkflowsPage: React.FC = () => {
               <label className="block text-xs font-medium text-[#D4D4D8] mb-1">
                 Target Git Branch:
               </label>
+              <div className="flex gap-2 mb-2">
+                {(['main', 'develop'] as const).map((b) => (
+                  <button
+                    key={b}
+                    type="button"
+                    onClick={() => setTargetBranch(b)}
+                    className={`px-2.5 py-1 rounded text-xs font-mono border transition-colors ${
+                      targetBranch === b
+                        ? 'bg-[#3B82F6]/15 border-[#3B82F6] text-[#F4F4F5]'
+                        : 'bg-[#141519] border-[#27272A] text-[#A1A1AA] hover:text-[#F4F4F5]'
+                    }`}
+                  >
+                    {b} ({b === 'main' ? 'PROD' : 'TEST'})
+                  </button>
+                ))}
+              </div>
               <input
                 type="text"
                 value={targetBranch}
@@ -435,8 +451,7 @@ export const WorkflowsPage: React.FC = () => {
                 className="w-full px-3 py-1.5 bg-[#141519] border border-[#27272A] rounded-md text-xs font-mono text-[#F4F4F5] focus:outline-none focus:border-[#3B82F6]"
               />
               <span className="text-[10px] text-[#71717A] mt-1 block">
-                Allowed branches:{' '}
-                {triggerModalWf.trigger?.allowedBranches?.join(', ') || 'any (default: main)'}
+                Supported environment branches: <code className="text-[#D4D4D8]">main</code> (PROD) and <code className="text-[#D4D4D8]">develop</code> (TEST)
               </span>
             </div>
 

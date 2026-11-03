@@ -30,6 +30,7 @@ export interface WorkflowHeaderProps {
   onCancel: () => void;
   isActionLoading?: boolean;
   artifactCount?: number;
+  environmentCount?: number;
 }
 
 export const WorkflowHeader: React.FC<WorkflowHeaderProps> = ({
@@ -40,11 +41,11 @@ export const WorkflowHeader: React.FC<WorkflowHeaderProps> = ({
   onPause,
   onCancel,
   isActionLoading = false,
-  artifactCount
+  artifactCount,
+  environmentCount
 }) => {
   const navigate = useNavigate();
   const [copiedSha, setCopiedSha] = useState(false);
-  const [showWorkflowDropdown, setShowWorkflowDropdown] = useState(false);
 
   const copyShaToClipboard = () => {
     navigator.clipboard.writeText(run.commitSha);
@@ -55,8 +56,8 @@ export const WorkflowHeader: React.FC<WorkflowHeaderProps> = ({
   const tabs = [
     { id: 'overview', label: 'Overview' },
     { id: 'logs', label: 'Logs' },
-    { id: 'artifacts', label: 'Artifacts', count: artifactCount !== undefined ? artifactCount : 4 },
-    { id: 'environments', label: 'Environments', count: 3 },
+    { id: 'artifacts', label: 'Artifacts', count: artifactCount !== undefined ? artifactCount : 0 },
+    { id: 'environments', label: 'Environments', count: environmentCount !== undefined ? environmentCount : 2 },
     { id: 'settings', label: 'Settings' },
   ];
 
@@ -193,7 +194,8 @@ export const WorkflowHeader: React.FC<WorkflowHeaderProps> = ({
             {/* Workflow selector */}
             <div className="relative hidden md:block">
               <button
-                onClick={() => setShowWorkflowDropdown(!showWorkflowDropdown)}
+                onClick={() => navigate('/workflows')}
+                title="View all workflows"
                 className="flex flex-col text-left px-2.5 py-1 bg-[#16181D] hover:bg-[#20222A] border border-[#27272A] rounded-md text-xs transition-colors select-none"
               >
                 <span className="text-[10px] text-[#71717A] leading-none mb-0.5">Workflow</span>
@@ -231,11 +233,16 @@ export const WorkflowHeader: React.FC<WorkflowHeaderProps> = ({
               size="sm"
               icon={<XCircle className="w-3.5 h-3.5" />}
               onClick={onCancel}
+              disabled={run.status !== 'running' && run.status !== 'queued'}
             >
               Cancel Run
             </Button>
 
-            <button className="p-1.5 rounded-md bg-[#16181D] hover:bg-[#20222A] border border-[#27272A] text-[#71717A] hover:text-[#F4F4F5] transition-colors">
+            <button
+              onClick={() => onTabChange('settings')}
+              title="Workflow settings"
+              className="p-1.5 rounded-md bg-[#16181D] hover:bg-[#20222A] border border-[#27272A] text-[#71717A] hover:text-[#F4F4F5] transition-colors"
+            >
               <MoreHorizontal className="w-4 h-4" />
             </button>
           </div>

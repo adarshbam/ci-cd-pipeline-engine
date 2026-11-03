@@ -1,13 +1,10 @@
 import path from "node:path";
 import type { Workflow } from "./workflow.js";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 
-import { readdir } from "fs/promises";
 async function readWorkflowFile(fileName: string): Promise<Workflow> {
   const workflowPath = path.join(process.cwd(), "workflows", fileName);
-
   const workflowFile = await readFile(workflowPath, "utf-8");
-
   const workflow: Workflow = JSON.parse(workflowFile);
   return workflow;
 }
@@ -18,17 +15,18 @@ export async function loadWorkflows(): Promise<Workflow[]> {
     withFileTypes: true,
   });
 
-  let workflows = [];
+  const workflows: Workflow[] = [];
 
-  for (const workflow of workflowDirFiles) {
-    const isValidJson: Boolean = /^[^.]+\.json$/.test(workflow.name);
-    console.log(workflow.name, isValidJson);
-    if (workflow.isFile() && isValidJson) {
-      const workflowJSON = await readWorkflowFile(workflow.name);
-
-      console.log(workflowJSON.webhook.url);
-
-      workflows.push(workflowJSON);
+  for (const entry of workflowDirFiles) {
+    if (entry.isFile() && entry.name.endsWith(".json")) {
+      try {
+        const workflowJSON = await readWorkflowFile(entry.name);
+        if (workflowJSON && typeof workflowJSON === "object" && workflowJSON.name) {
+          workflows.push(workflowJSON);
+        }
+      } catch (err) {
+        console.error(`[WorkflowLoader] Failed to parse workflow file ${entry.name}:`, err);
+      }
     }
   }
 

@@ -222,6 +222,15 @@ export interface BackendWorkflow {
   isValid: boolean;
   validationErrors: string[];
   runsCount: number;
+  activeRunsCount?: number;
+  metrics?: {
+    totalRuns: number;
+    successfulRuns: number;
+    failedRuns: number;
+    activeRuns?: number;
+    averageDurationMs?: number;
+    avgDurationMs?: number;
+  };
   lastRun?: {
     id: string;
     status: string;
@@ -264,7 +273,8 @@ export interface BackendWorkflowDetail {
     totalRuns: number;
     successfulRuns: number;
     failedRuns: number;
-    avgDurationMs: number;
+    avgDurationMs?: number;
+    averageDurationMs?: number;
   };
 }
 

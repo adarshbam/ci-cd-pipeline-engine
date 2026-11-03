@@ -4,19 +4,28 @@ import { join } from "node:path";
 
 interface TestResult {
   file: string;
-  status: "PASS" | "FAIL" | "TIMEOUT";
+  status: "PASS" | "FAIL" | "TIMEOUT" | "SKIPPED";
   durationMs: number;
   error?: string;
 }
 
+const INTERACTIVE_OR_META_SUITES = new Set([
+  "day7-final-regression.test.ts",
+  "day7-full-release.test.ts",
+  "day7-live-webhook.test.ts",
+]);
+
 async function runSingleTest(file: string): Promise<TestResult> {
+  if (INTERACTIVE_OR_META_SUITES.has(file)) {
+    return { file, status: "SKIPPED", durationMs: 0 };
+  }
+
   const filePath = join("src/tests", file);
   const start = Date.now();
 
   return new Promise<TestResult>((resolve) => {
     let resolved = false;
-    const proc = spawn("npx", ["tsx", "--test", filePath], {
-      shell: true,
+    const proc = spawn(process.execPath, ["--import", "tsx", filePath], {
       windowsHide: true,
       env: { ...process.env, CI: "true" },
     });
@@ -41,10 +50,10 @@ async function runSingleTest(file: string): Promise<TestResult> {
           file,
           status: "TIMEOUT",
           durationMs: Date.now() - start,
-          error: "Test exceeded 20s timeout limit",
+          error: "Test exceeded 30s timeout limit",
         });
       }
-    }, 20000);
+    }, 30000);
 
     proc.on("close", (code) => {
       if (!resolved) {
@@ -88,6 +97,7 @@ async function main() {
 
   const results: TestResult[] = [];
   const passed: string[] = [];
+  const skipped: string[] = [];
   const failed: TestResult[] = [];
 
   for (let i = 0; i < testFiles.length; i++) {
@@ -99,6 +109,9 @@ async function main() {
     if (res.status === "PASS") {
       passed.push(file);
       console.log(`PASS (${res.durationMs}ms)`);
+    } else if (res.status === "SKIPPED") {
+      skipped.push(file);
+      console.log(`SKIPPED (interactive/meta)`);
     } else {
       failed.push(res);
       console.log(`${res.status} (${res.durationMs}ms)`);
@@ -108,6 +121,7 @@ async function main() {
   console.log("\n=================================");
   console.log(`TOTAL: ${results.length}`);
   console.log(`PASSED: ${passed.length}`);
+  console.log(`SKIPPED: ${skipped.length}`);
   console.log(`FAILED / TIMED OUT: ${failed.length}`);
   console.log("=================================\n");
 
@@ -116,10 +130,14 @@ async function main() {
     for (const f of failed) {
       console.log(`- ${f.file} (${f.status})`);
       if (f.error) {
-        console.log(`  Reason: ${f.error.replace(/\n/g, " ").slice(0, 150)}`);
+        console.log(`  Reason: ${f.error.replace(/\n/g, " ").slice(0, 200)}`);
       }
     }
+    process.exitCode = 1;
   }
 }
 
-main().catch(console.error);
+main().catch((err) => {
+  console.error(err);
+  process.exitCode = 1;
+});

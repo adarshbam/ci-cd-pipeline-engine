@@ -8,7 +8,7 @@
   },
   "trigger": {
     "events": ["push"],
-    "allowedBranches": ["main", "development"]
+    "allowedBranches": ["main", "develop"]
   },
   "jobs": {
     "build": {

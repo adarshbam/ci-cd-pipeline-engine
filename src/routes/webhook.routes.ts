@@ -18,7 +18,8 @@ import {
   getArtifactPath,
   validateArtifactIdentifier,
 } from "../artifacts/artifact-manager.js";
-import { stat } from "node:fs/promises";
+import { readdir, readFile, stat } from "node:fs/promises";
+import path from "node:path";
 
 // Helper: Verify local or authenticated management access
 function isAuthorizedManagement(req: Request): boolean {
@@ -283,12 +284,45 @@ export function validateWorkflow(wf: Workflow): WorkflowValidation {
     for (const [jobName, job] of Object.entries(wf.jobs)) {
       if (!job.steps || !Array.isArray(job.steps) || job.steps.length === 0) {
         errors.push(`Job '${jobName}' must contain at least one step`);
+      } else {
+        for (const [idx, step] of job.steps.entries()) {
+          if (!step || typeof step.name !== "string" || !step.name.trim()) {
+            errors.push(`Job '${jobName}' step #${idx + 1} is missing a valid name`);
+          }
+          const hasRun = "run" in step && typeof step.run === "string" && step.run.trim().length > 0;
+          const hasScript = "script" in step && typeof step.script === "string" && step.script.trim().length > 0;
+          if (!hasRun && !hasScript) {
+            errors.push(`Job '${jobName}' step '${step?.name || idx + 1}' must specify either 'run' or 'script'`);
+          }
+        }
       }
+      const needsList = Array.isArray(job.needs) ? job.needs : [];
       if (job.needs && Array.isArray(job.needs)) {
         for (const dep of job.needs) {
           if (!jobNames.has(dep)) {
             errors.push(`Job '${jobName}' depends on missing job '${dep}'`);
           }
+        }
+      }
+      if (job.artifacts?.upload && Array.isArray(job.artifacts.upload)) {
+        for (const up of job.artifacts.upload) {
+          if (!up?.name || !up?.path) {
+            errors.push(`Job '${jobName}' has an artifact upload missing 'name' or 'path'`);
+          }
+        }
+      }
+      if (job.artifacts?.download && Array.isArray(job.artifacts.download)) {
+        for (const dl of job.artifacts.download) {
+          if (!dl?.name || !dl?.path || !dl?.fromJob) {
+            errors.push(`Job '${jobName}' artifact download '${dl?.name || "unknown"}' must specify 'name', 'path', and 'fromJob'`);
+          } else if (!needsList.includes(dl.fromJob)) {
+            errors.push(`Job '${jobName}' downloads artifact '${dl.name}' from '${dl.fromJob}' but does not list '${dl.fromJob}' in 'needs'`);
+          }
+        }
+      }
+      if (job.rollback !== undefined) {
+        if (!Array.isArray(job.rollback.steps) || job.rollback.steps.length === 0) {
+          errors.push(`Job '${jobName}' rollback configuration must contain at least one step`);
         }
       }
     }
@@ -365,7 +399,15 @@ function getLatestRun(runs: any[]): any | undefined {
   return latest;
 }
 
-export function createWebhookRouter(workflows: Workflow[]) {
+export interface WebhookRouterOptions {
+  restoreHistory?: boolean;
+  storageDir?: string;
+}
+
+export function createWebhookRouter(
+  workflows: Workflow[],
+  options?: WebhookRouterOptions,
+) {
   const router = Router();
   const processedDeliveries = new Set<string>();
   const engines = new Map<string, PipelineEngine>();
@@ -376,19 +418,21 @@ export function createWebhookRouter(workflows: Workflow[]) {
     engines.set(workflow.name, engine);
   }
 
-  // Load and recover persistent runs from disk across server restarts
-  loadAllStoredRuns()
-    .then((storedRuns) => {
-      for (const stored of storedRuns) {
-        const engine = engines.get(stored.pipelineId);
-        if (engine) {
-          engine.addHistoricalRun(RunPipeline.fromStored(stored));
+  // Load and recover persistent runs from disk across server restarts when enabled
+  if (options?.restoreHistory) {
+    loadAllStoredRuns(options.storageDir)
+      .then((storedRuns) => {
+        for (const stored of storedRuns) {
+          const engine = engines.get(stored.pipelineId);
+          if (engine) {
+            engine.addHistoricalRun(RunPipeline.fromStored(stored));
+          }
         }
-      }
-    })
-    .catch((err) => {
-      console.error("[RunStore] Failed to load historical runs into engines:", err);
-    });
+      })
+      .catch((err) => {
+        console.error("[RunStore] Failed to load historical runs into engines:", err);
+      });
+  }
 
   for (const workflow of workflows) {
     const engine = engines.get(workflow.name)!;
@@ -461,11 +505,12 @@ export function createWebhookRouter(workflows: Workflow[]) {
           return res.status(404).json({ error: "Run not found" });
         }
 
-        await engine.cancelRun(runId);
+        const cancelled = await engine.cancelRun(runId);
         return res.status(200).json({
           runId: run.id,
           pipelineId: run.pipelineId,
           status: run.status,
+          cancelled,
           jobs: run.jobs,
         });
       },
@@ -718,7 +763,9 @@ export function createWebhookRouter(workflows: Workflow[]) {
                   const description =
                     completed.status === "SUCCESS"
                       ? "Pipeline completed successfully."
-                      : "Pipeline failed one or more jobs.";
+                      : completed.status === "CANCELLED"
+                        ? "Pipeline was cancelled."
+                        : "Pipeline failed one or more jobs.";
 
                   if (hasToken) {
                     try {
@@ -810,6 +857,8 @@ export function createWebhookRouter(workflows: Workflow[]) {
         isValid: validation.isValid,
         validationErrors: validation.errors,
         runsCount: allRuns.length,
+        activeRunsCount: engine ? engine.getActiveRunCount() : 0,
+        metrics: engine ? engine.getMetricsSnapshot() : undefined,
         lastRun: latestRun
           ? {
               id: latestRun.id,
@@ -915,10 +964,27 @@ export function createWebhookRouter(workflows: Workflow[]) {
       });
     }
 
-    const branch = (req.body?.branch ||
-      req.query.branch ||
-      wf.trigger.allowedBranches?.[0] ||
-      "main") as string;
+    const rawBranch =
+      req.body?.branch ??
+      req.query.branch ??
+      wf.trigger.allowedBranches?.[0] ??
+      "main";
+
+    if (typeof rawBranch !== "string" || !rawBranch.trim()) {
+      return res.status(400).json({ error: "Invalid branch parameter" });
+    }
+    const branch = rawBranch.trim();
+
+    try {
+      resolveEnvironment(branch);
+    } catch (err) {
+      return res.status(400).json({
+        error:
+          err instanceof Error
+            ? err.message
+            : "Unsupported branch. Supported branches are 'main' and 'develop'.",
+      });
+    }
 
     try {
       const run = await engine.run(branch);
@@ -1184,14 +1250,87 @@ export function createWebhookRouter(workflows: Workflow[]) {
       return res.status(404).json({ error: "Run not found" });
     }
 
-    await targetEngine.cancelRun(runId);
+    const cancelled = await targetEngine.cancelRun(runId);
     return res.status(200).json({
       runId: targetRun.id,
       pipelineId: targetRun.pipelineId,
       status: targetRun.status,
+      cancelled,
       jobs: targetRun.jobs,
     });
   });
+
+  async function sendArtifactFileOrDirectory(
+    res: any,
+    filePath: string,
+    artifactName: string,
+    fileStat: any,
+  ) {
+    if (!fileStat) {
+      return res.status(404).json({ error: "Artifact not found" });
+    }
+    if (fileStat.isDirectory()) {
+      const entries = await readdir(filePath, { withFileTypes: true });
+      const files = entries.filter((e) => e.isFile());
+      if (files.length === 1 && entries.length === 1 && files[0]) {
+        const singlePath = path.join(filePath, files[0].name);
+        const singleStat = await stat(singlePath);
+        res.setHeader(
+          "Content-Disposition",
+          `attachment; filename="${files[0].name}"`,
+        );
+        res.setHeader("Content-Type", "application/octet-stream");
+        res.setHeader("Content-Length", singleStat.size);
+        return res.sendFile(singlePath);
+      }
+
+      // Bundle directory files into a downloadable JSON archive
+      const bundleFiles: Record<string, string> = {};
+      async function collectDir(dir: string, prefix = ""): Promise<void> {
+        const dirEntries = await readdir(dir, { withFileTypes: true });
+        for (const entry of dirEntries) {
+          const full = path.join(dir, entry.name);
+          const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+          if (entry.isDirectory()) {
+            await collectDir(full, rel);
+          } else if (entry.isFile()) {
+            const content = await readFile(full);
+            bundleFiles[rel] = content.toString("utf8");
+          }
+        }
+      }
+      await collectDir(filePath);
+      const bundleBuffer = Buffer.from(
+        JSON.stringify(
+          {
+            artifact: artifactName,
+            type: "directory-bundle",
+            fileCount: Object.keys(bundleFiles).length,
+            files: bundleFiles,
+          },
+          null,
+          2,
+        ),
+        "utf8",
+      );
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${artifactName}-bundle.json"`,
+      );
+      res.setHeader("Content-Type", "application/octet-stream");
+      res.setHeader("Content-Length", bundleBuffer.length);
+      return res.status(200).send(bundleBuffer);
+    }
+
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${artifactName}"`,
+    );
+    res.setHeader("Content-Type", "application/octet-stream");
+    res.setHeader("Content-Length", fileStat.size);
+
+    return res.sendFile(filePath);
+  }
 
   // 8b. List Run Artifacts
   router.get(
@@ -1256,20 +1395,12 @@ export function createWebhookRouter(workflows: Workflow[]) {
           throw e;
         }
 
-        if (fileStat.isDirectory()) {
-          return res
-            .status(400)
-            .json({ error: "Directory downloads not supported directly" });
-        }
-
-        res.setHeader(
-          "Content-Disposition",
-          `attachment; filename="${artifactName}"`,
+        return await sendArtifactFileOrDirectory(
+          res,
+          filePath,
+          artifactName,
+          fileStat,
         );
-        res.setHeader("Content-Type", "application/octet-stream");
-        res.setHeader("Content-Length", fileStat.size);
-
-        return res.sendFile(filePath);
       } catch (error) {
         console.error("Artifact download error:", error);
         return res.status(500).json({ error: "Failed to download artifact" });
@@ -1313,20 +1444,12 @@ export function createWebhookRouter(workflows: Workflow[]) {
         );
         const fileStat = await stat(filePath);
 
-        if (fileStat.isDirectory()) {
-          return res
-            .status(400)
-            .json({ error: "Directory downloads not supported directly" });
-        }
-
-        res.setHeader(
-          "Content-Disposition",
-          `attachment; filename="${artifactName}"`,
+        return await sendArtifactFileOrDirectory(
+          res,
+          filePath,
+          artifactName,
+          fileStat,
         );
-        res.setHeader("Content-Type", "application/octet-stream");
-        res.setHeader("Content-Length", fileStat.size);
-
-        return res.sendFile(filePath);
       } catch (error) {
         console.error("Artifact download error:", error);
         return res.status(500).json({ error: "Failed to download artifact" });
@@ -1435,7 +1558,7 @@ export function createWebhookRouter(workflows: Workflow[]) {
       managementSecretConfigured: hasManagementSecret,
       recentDeliveries: recentDeliveries.slice(0, 50),
       memoryPersistenceNotice:
-        "In-Memory Engine Storage: Run history is stored in memory and will reset if the server process restarts.",
+        "Persistent Engine Storage: Run history is stored in memory and persisted to runtime/history/runs across server restarts.",
     });
   });
 
@@ -1561,28 +1684,36 @@ export function createWebhookRouter(workflows: Workflow[]) {
       }
     }
 
+    const mapEnvStatus = (run: any) => {
+      if (!run) return "idle";
+      if (run.status === "SUCCESS") return "healthy";
+      if (run.status === "RUNNING" || run.status === "QUEUED") return "deploying";
+      if (run.status === "FAILED") return "error";
+      return "idle";
+    };
+
     envsList.push({
       id: "env-prod",
       name: "Production",
-      status: lastProdRun?.status === "SUCCESS" ? "healthy" : "idle",
+      status: mapEnvStatus(lastProdRun),
       url: prodHealthUrl,
       currentRunId: lastProdRun?.id,
       lastDeployedAt: lastProdRun?.finishedAt || "Not deployed",
       activeVersion: lastProdRun?.commitSha ? lastProdRun.commitSha.slice(0, 7) : "v1.0.0",
-      healthScore: 100,
+      healthScore: lastProdRun?.status === "FAILED" ? 0 : 100,
       targetBranch: "main",
     });
 
     envsList.push({
       id: "env-test",
       name: "Staging / Preview",
-      status: lastTestRun?.status === "SUCCESS" ? "healthy" : "idle",
+      status: mapEnvStatus(lastTestRun),
       url: testHealthUrl,
       currentRunId: lastTestRun?.id,
       lastDeployedAt: lastTestRun?.finishedAt || "Not deployed",
       activeVersion: lastTestRun?.commitSha ? lastTestRun.commitSha.slice(0, 7) : "v1.0.0-rc",
-      healthScore: 100,
-      targetBranch: "staging",
+      healthScore: lastTestRun?.status === "FAILED" ? 0 : 100,
+      targetBranch: "develop",
     });
 
     return res.json(envsList);
