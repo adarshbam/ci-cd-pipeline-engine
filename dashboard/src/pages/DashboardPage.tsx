@@ -71,6 +71,13 @@ export const DashboardPage: React.FC = () => {
       setLoading(false);
     }
     init();
+
+    // Live dashboard polling: refresh active runs and metrics automatically
+    const interval = setInterval(() => {
+      loadData();
+    }, 2500);
+
+    return () => clearInterval(interval);
   }, [dataMode]);
 
   const handleRefresh = async () => {

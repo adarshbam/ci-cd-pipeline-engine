@@ -154,6 +154,7 @@ export async function executeJob(
 
       jobRun.failureReason =
         failedStep.stderr?.trim() ||
+        failedStep.stdout?.trim() ||
         `Step failed with exit code ${failedStep.exitCode ?? "unknown"}`;
 
       await appendLogEntry(

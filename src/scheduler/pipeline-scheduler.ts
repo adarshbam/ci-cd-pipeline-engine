@@ -47,7 +47,15 @@ export async function runScheduler(
             job.status === "FAILED",
         )
       ) {
-        run.fail();
+        const firstFailedJob = Object.values(run.jobs).find(
+          (j) => j.status === "FAILED" && j.failureReason,
+        );
+        const failureReason =
+          run.failureReason ||
+          (firstFailedJob
+            ? `Job '${firstFailedJob.jobId}' failed: ${firstFailedJob.failureReason}`
+            : "Pipeline failed: One or more jobs failed or were skipped");
+        run.fail(failureReason);
       } else {
         run.complete();
       }
@@ -68,7 +76,21 @@ export async function runScheduler(
         }
       });
     } else if (skippedJobs.length === 0) {
-      throw new Error("Cycle Detected!");
+      const stuckJobs = Object.values(run.jobs).filter(
+        (job) => job.status === "QUEUED",
+      );
+      const stuckJobIds = stuckJobs.map((j) => j.jobId);
+
+      for (const job of stuckJobs) {
+        job.status = "FAILED";
+        job.finishedAt = new Date();
+        const deps = workflow.jobs[job.jobId]?.needs ?? [];
+        job.failureReason = `Cycle Detected: Job '${job.jobId}' is blocked by circular or unresolvable dependencies [${deps.join(", ")}]`;
+      }
+
+      const cycleMsg = `Cycle Detected! Dependency cycle or deadlock prevented jobs [${stuckJobIds.join(", ")}] from executing`;
+      run.fail(cycleMsg);
+      throw new Error(cycleMsg);
     }
   }
 }

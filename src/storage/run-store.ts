@@ -30,6 +30,7 @@ export interface StoredRun {
   repository?: string | undefined;
   deliveryId?: string | undefined;
   commitStatus?: CommitStatusInfo | undefined;
+  failureReason?: string | undefined;
 }
 
 const DEFAULT_STORAGE_DIR = path.resolve("runtime/history/runs");
@@ -85,6 +86,7 @@ export function serializeRun(run: PipelineRun): StoredRun {
     repository: run.repository,
     deliveryId: run.deliveryId,
     commitStatus: run.commitStatus,
+    failureReason: (run as any).failureReason,
   };
 }
 
@@ -123,7 +125,10 @@ export async function loadAllStoredRuns(storageDir = DEFAULT_STORAGE_DIR): Promi
       const fullPath = path.join(storageDir, file.name);
       try {
         const raw = await readFile(fullPath, "utf8");
+        if (!raw || !raw.trim()) continue;
         const parsed = JSON.parse(raw) as StoredRun;
+
+        let needsPersist = false;
 
         // Honest Crash / Restart Recovery:
         // Any run left in RUNNING or QUEUED state could not have finished.
@@ -132,17 +137,31 @@ export async function loadAllStoredRuns(storageDir = DEFAULT_STORAGE_DIR): Promi
           console.warn(`[RunStore] Recovering interrupted run ${parsed.id} (${parsed.pipelineId}) -> FAILED`);
           parsed.status = "FAILED";
           parsed.finishedAt = new Date().toISOString();
+          parsed.failureReason = parsed.failureReason || "Execution interrupted by server restart or crash";
+          needsPersist = true;
 
           if (parsed.jobs) {
             for (const [jobId, job] of Object.entries(parsed.jobs)) {
               if (job.status === "RUNNING" || job.status === "QUEUED") {
                 job.status = "FAILED";
-                job.failureReason = "Execution interrupted by server restart or crash";
+                job.failureReason = job.failureReason || parsed.failureReason || "Execution interrupted by server restart or crash";
                 job.finishedAt = new Date().toISOString();
               }
             }
           }
+        } else if (parsed.status === "FAILED" && parsed.jobs) {
+          // Clean up any jobs that remained QUEUED or RUNNING when pipeline failed
+          for (const [jobId, job] of Object.entries(parsed.jobs)) {
+            if (job.status === "RUNNING" || job.status === "QUEUED") {
+              job.status = "FAILED";
+              job.failureReason = job.failureReason || parsed.failureReason || "Pipeline execution failed or was interrupted";
+              job.finishedAt = job.finishedAt || parsed.finishedAt || new Date().toISOString();
+              needsPersist = true;
+            }
+          }
+        }
 
+        if (needsPersist) {
           // Persist the recovered status back to disk
           await writeFile(fullPath, JSON.stringify(parsed, null, 2), "utf8");
         }

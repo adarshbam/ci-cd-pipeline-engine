@@ -4,7 +4,7 @@
   "description": "GitHub CI/CD Engine",
   "main": "index.js",
   "scripts": {
-    "dev": "node --env-file=.env --watch --import tsx ./src/server.ts",
+    "dev": "node --env-file=.env --watch-path=./src --watch-path=./workflows --import tsx ./src/server.ts",
     "tunnel": "tsx src/tools/run-ngrok.ts",
     "dev:all": "concurrently \"npm run dev\" \"npm run tunnel\"",
     "build": "tsc",

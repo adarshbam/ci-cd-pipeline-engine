@@ -2,7 +2,7 @@
   "$schema": "./schema/workflow.schema.json",
   "version": "1.0",
 
-  "name": "vault-storage",
+  "name": "vault-storage-cicd",
 
   "webhook": {
     "url": "/github/ci-cd"

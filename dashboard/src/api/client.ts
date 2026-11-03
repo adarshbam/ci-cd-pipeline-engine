@@ -369,6 +369,7 @@ export const pipelineApi = {
           repository: br.repository,
           deliveryId: br.deliveryId,
           commitStatus: br.commitStatus,
+          failureReason: br.failureReason,
           isIdlePreview: false,
           jobs: Object.values(br.jobs || {}).map((j: any) => ({
             id: j.jobId,

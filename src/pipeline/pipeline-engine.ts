@@ -129,8 +129,20 @@ class PipelineEngine {
 
         console.error("Scheduler failed:", err);
 
-        if (pipelineRun.status === "RUNNING") {
-          pipelineRun.fail();
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        pipelineRun.failureReason = pipelineRun.failureReason || errorMessage;
+
+        // Ensure any remaining queued or running jobs are marked as failed with a clear failure reason
+        for (const job of Object.values(pipelineRun.jobs)) {
+          if (job.status === "QUEUED" || job.status === "RUNNING") {
+            job.status = "FAILED";
+            job.finishedAt = new Date();
+            job.failureReason = job.failureReason || `Pipeline failed: ${errorMessage}`;
+          }
+        }
+
+        if (pipelineRun.status === "RUNNING" || pipelineRun.status === "QUEUED") {
+          pipelineRun.fail(errorMessage);
         }
 
         this.metrics.finishRun(pipelineRun.id, "FAILED");
@@ -140,9 +152,7 @@ class PipelineEngine {
           createLogEntry({
             runId: pipelineRun.id,
             level: "ERROR",
-            message: `Pipeline failed: ${
-              err instanceof Error ? err.message : String(err)
-            }`,
+            message: `Pipeline failed: ${errorMessage}`,
           }),
         );
       })
@@ -200,6 +210,17 @@ class PipelineEngine {
   addHistoricalRun(run: RunPipeline): void {
     if (!this.runs.has(run.id)) {
       this.runs.set(run.id, run);
+      if (run.status === "SUCCESS" || run.status === "FAILED") {
+        const duration =
+          run.startedAt && run.finishedAt
+            ? Math.max(
+                0,
+                new Date(run.finishedAt).getTime() -
+                  new Date(run.startedAt).getTime(),
+              )
+            : 0;
+        this.metrics.recordCompletedRun(run.id, run.status, duration);
+      }
     }
   }
 

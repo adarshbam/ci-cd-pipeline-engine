@@ -205,10 +205,18 @@ export const JobDetailDrawer: React.FC<JobDetailDrawerProps> = ({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-[#F87171] font-semibold text-xs">
                 <AlertCircle className="w-4 h-4 shrink-0 text-[#F87171]" />
-                <span>Job Failed with Exit Code {job.exitCode ?? 1}</span>
+                <span>
+                  {job.exitCode !== undefined && job.exitCode !== null
+                    ? `Job Failed with Exit Code ${job.exitCode}`
+                    : job.failureReason?.includes('Cycle')
+                    ? 'Job Failed: Dependency Cycle Detected'
+                    : job.failureReason?.includes('interrupted')
+                    ? 'Job Failed: Server Interrupted or Stopped'
+                    : 'Job Failed'}
+                </span>
               </div>
               <span className="text-[10px] font-mono text-[#F87171] bg-[#34181C] px-1.5 py-0.5 rounded border border-[#4C1D24]">
-                Exit {job.exitCode ?? 1}
+                {job.exitCode !== undefined && job.exitCode !== null ? `Exit ${job.exitCode}` : 'Failed'}
               </span>
             </div>
             {job.failureReason && (
@@ -275,7 +283,7 @@ export const JobDetailDrawer: React.FC<JobDetailDrawerProps> = ({
                 : 'text-[#71717A] hover:text-[#D4D4D8]'
             }`}
           >
-            Step Execution ({job.steps?.length || 2} steps)
+            Step Execution ({job.steps?.length || 0} steps)
             {activeTab === 'steps' && (
               <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#3B82F6]" />
             )}
@@ -402,102 +410,101 @@ export const JobDetailDrawer: React.FC<JobDetailDrawerProps> = ({
         {/* Tab 2: Step Execution Breakdown */}
         {activeTab === 'steps' && (
           <div className="space-y-2">
-            {(job.steps && job.steps.length > 0
-              ? job.steps
-              : [
-                  {
-                    name: `Execute ${job.name} task`,
-                    duration: job.duration || '8s',
-                    status: job.status,
-                    exitCode: job.exitCode ?? (job.status === 'success' ? 0 : 1)
-                  },
-                  {
-                    name: 'Upload build artifacts & report telemetry',
-                    duration: '2s',
-                    status: job.status === 'failed' ? 'skipped' : job.status,
-                    exitCode: 0
-                  }
-                ]
-            ).map((step: any, idx: number) => {
-              const isExpanded = expandedStepIndex === idx;
-              return (
-                <div
-                  key={idx}
-                  className="rounded-lg bg-[#141519] border border-[#22242A] overflow-hidden"
-                >
+            {job.steps && job.steps.length > 0 ? (
+              job.steps.map((step: any, idx: number) => {
+                const isExpanded = expandedStepIndex === idx;
+                return (
                   <div
-                    onClick={() => setExpandedStepIndex(isExpanded ? null : idx)}
-                    className="p-3 flex items-center justify-between cursor-pointer hover:bg-[#181A22] transition-colors"
+                    key={idx}
+                    className="rounded-lg bg-[#141519] border border-[#22242A] overflow-hidden"
                   >
-                    <div className="flex items-center gap-2.5">
-                      <span className="font-mono text-xs text-[#71717A] w-4">
-                        {idx + 1}
-                      </span>
-                      <div>
-                        <h5 className="text-xs font-semibold text-[#F4F4F5] font-mono">
-                          {step.name}
-                        </h5>
-                        <div className="flex items-center gap-2 mt-0.5 text-[10px] text-[#71717A] font-mono">
-                          <span>{step.duration || '4s'}</span>
-                          <span>•</span>
-                          <span>
-                            Exit code:{' '}
-                            <span
-                              className={
-                                step.exitCode === 0
-                                  ? 'text-[#10B981]'
-                                  : 'text-[#EF4444]'
-                              }
-                            >
-                              {step.exitCode ?? '0'}
+                    <div
+                      onClick={() => setExpandedStepIndex(isExpanded ? null : idx)}
+                      className="p-3 flex items-center justify-between cursor-pointer hover:bg-[#181A22] transition-colors"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <span className="font-mono text-xs text-[#71717A] w-4">
+                          {idx + 1}
+                        </span>
+                        <div>
+                          <h5 className="text-xs font-semibold text-[#F4F4F5] font-mono">
+                            {step.name}
+                          </h5>
+                          <div className="flex items-center gap-2 mt-0.5 text-[10px] text-[#71717A] font-mono">
+                            <span>{step.duration || '0s'}</span>
+                            <span>•</span>
+                            <span>
+                              Exit code:{' '}
+                              <span
+                                className={
+                                  step.exitCode === 0
+                                    ? 'text-[#10B981]'
+                                    : 'text-[#EF4444]'
+                                }
+                              >
+                                {step.exitCode ?? '0'}
+                              </span>
                             </span>
-                          </span>
+                          </div>
                         </div>
                       </div>
+                      <div className="flex items-center gap-2">
+                        <StatusBadge status={step.status as any} size="xs" />
+                        {isExpanded ? (
+                          <ChevronDown className="w-4 h-4 text-[#71717A]" />
+                        ) : (
+                          <ChevronRight className="w-4 h-4 text-[#71717A]" />
+                        )}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <StatusBadge status={step.status as any} size="xs" />
-                      {isExpanded ? (
-                        <ChevronDown className="w-4 h-4 text-[#71717A]" />
-                      ) : (
-                        <ChevronRight className="w-4 h-4 text-[#71717A]" />
-                      )}
-                    </div>
-                  </div>
 
-                  {/* Expandable Step Console Output */}
-                  {isExpanded && (
-                    <div className="p-3 bg-[#0B0C0E] border-t border-[#22242A] font-mono text-[11px] space-y-1">
-                      {step.stdout && (
-                        <div>
-                          <span className="text-[10px] text-[#3B82F6] font-semibold block mb-0.5">
-                            stdout:
+                    {/* Expandable Step Console Output */}
+                    {isExpanded && (
+                      <div className="p-3 bg-[#0B0C0E] border-t border-[#22242A] font-mono text-[11px] space-y-1">
+                        {step.stdout && (
+                          <div>
+                            <span className="text-[10px] text-[#3B82F6] font-semibold block mb-0.5">
+                              stdout:
+                            </span>
+                            <pre className="text-[#D4D4D8] whitespace-pre-wrap bg-[#141519] p-2 rounded border border-[#22242A]">
+                              {step.stdout}
+                            </pre>
+                          </div>
+                        )}
+                        {step.stderr && (
+                          <div>
+                            <span className="text-[10px] text-[#F87171] font-semibold block mb-0.5">
+                              stderr:
+                            </span>
+                            <pre className="text-[#F87171] whitespace-pre-wrap bg-[#241215] p-2 rounded border border-[#4C1D24]">
+                              {step.stderr}
+                            </pre>
+                          </div>
+                        )}
+                        {!step.stdout && !step.stderr && (
+                          <span className="text-[#71717A] italic text-xs">
+                            No direct console output captured for this step.
                           </span>
-                          <pre className="text-[#D4D4D8] whitespace-pre-wrap bg-[#141519] p-2 rounded border border-[#22242A]">
-                            {step.stdout}
-                          </pre>
-                        </div>
-                      )}
-                      {step.stderr && (
-                        <div>
-                          <span className="text-[10px] text-[#F87171] font-semibold block mb-0.5">
-                            stderr:
-                          </span>
-                          <pre className="text-[#F87171] whitespace-pre-wrap bg-[#241215] p-2 rounded border border-[#4C1D24]">
-                            {step.stderr}
-                          </pre>
-                        </div>
-                      )}
-                      {!step.stdout && !step.stderr && (
-                        <span className="text-[#71717A] italic text-xs">
-                          No direct console output captured for this step.
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            ) : (
+              <div className="p-4 rounded-lg bg-[#141519] border border-[#22242A] text-center space-y-2">
+                <AlertCircle className="w-5 h-5 text-[#F87171] mx-auto opacity-80" />
+                <p className="text-xs text-[#F4F4F5] font-semibold">
+                  No Step Results Captured
+                </p>
+                <p className="text-[11px] text-[#A1A1AA] font-mono max-w-sm mx-auto">
+                  {job.failureReason ||
+                    (job.status === 'skipped'
+                      ? 'Job was skipped because an upstream dependency failed or was cancelled.'
+                      : 'Job did not execute steps prior to termination.')}
+                </p>
+              </div>
+            )}
           </div>
         )}
 

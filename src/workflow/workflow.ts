@@ -108,6 +108,7 @@ export interface PipelineRun {
   repository?: string;
   deliveryId?: string;
   commitStatus?: CommitStatusInfo;
+  failureReason?: string;
 }
 
 export interface JobRun {

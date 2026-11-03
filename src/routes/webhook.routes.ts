@@ -292,6 +292,44 @@ export function validateWorkflow(wf: Workflow): WorkflowValidation {
         }
       }
     }
+
+    // DAG Cycle Detection
+    const visited = new Set<string>();
+    const visiting = new Set<string>();
+    const cycleFound: string[] = [];
+
+    function checkCycle(jobId: string, path: string[]): boolean {
+      if (visiting.has(jobId)) {
+        const cycleStartIndex = path.indexOf(jobId);
+        cycleFound.push(...path.slice(cycleStartIndex), jobId);
+        return true;
+      }
+      if (visited.has(jobId)) return false;
+
+      visiting.add(jobId);
+      const deps = wf.jobs[jobId]?.needs ?? [];
+      for (const dep of deps) {
+        if (wf.jobs[dep]) {
+          if (checkCycle(dep, [...path, jobId])) {
+            return true;
+          }
+        }
+      }
+      visiting.delete(jobId);
+      visited.add(jobId);
+      return false;
+    }
+
+    for (const jobId of Object.keys(wf.jobs)) {
+      if (!visited.has(jobId)) {
+        if (checkCycle(jobId, [])) {
+          errors.push(
+            `Circular dependency detected: ${cycleFound.join(" -> ")}. Workflows must be a Directed Acyclic Graph (DAG).`
+          );
+          break;
+        }
+      }
+    }
   }
   return {
     isValid: errors.length === 0,
@@ -964,6 +1002,7 @@ export function createWebhookRouter(workflows: Workflow[]) {
         succeededJobCount: succeededJobs,
         failedJobCount: failedJobs,
         failedJobId: firstFailedJob?.jobId,
+        failureReason: r.failureReason || firstFailedJob?.failureReason,
         jobs: r.jobs,
       };
     });
@@ -1041,6 +1080,7 @@ export function createWebhookRouter(workflows: Workflow[]) {
       repository: targetRun.repository,
       deliveryId: targetRun.deliveryId,
       commitStatus: targetRun.commitStatus,
+      failureReason: targetRun.failureReason || firstFailedJob?.failureReason,
       jobs: jobsWithDeps,
       failedJobId: firstFailedJob?.jobId,
     });
@@ -1184,6 +1224,16 @@ export function createWebhookRouter(workflows: Workflow[]) {
     async (req, res) => {
       const { runId, jobId, artifactName } = req.params;
 
+      if (
+        typeof runId !== "string" ||
+        typeof jobId !== "string" ||
+        typeof artifactName !== "string"
+      ) {
+        return res
+          .status(400)
+          .json({ error: "Invalid artifact identifier format" });
+      }
+
       try {
         validateArtifactIdentifier(runId);
         validateArtifactIdentifier(jobId);
@@ -1233,6 +1283,12 @@ export function createWebhookRouter(workflows: Workflow[]) {
     requireManagementAuth,
     async (req, res) => {
       const { runId, artifactName } = req.params;
+
+      if (typeof runId !== "string" || typeof artifactName !== "string") {
+        return res
+          .status(400)
+          .json({ error: "Invalid artifact identifier format" });
+      }
 
       try {
         validateArtifactIdentifier(runId);
@@ -1303,14 +1359,19 @@ export function createWebhookRouter(workflows: Workflow[]) {
     let completedCountWithDuration = 0;
 
     for (const eng of engines.values()) {
-      const snap = eng.getMetricsSnapshot();
-      totalRuns += eng.getAllRuns().length;
       activeRuns += eng.getActiveRunCount();
-      successfulRuns += snap.successfulRuns;
-      failedRuns += snap.failedRuns;
+      const runs = eng.getAllRuns();
+      totalRuns += runs.length;
 
-      for (const r of eng.getAllRuns()) {
-        if (r.status === "CANCELLED") cancelledRuns++;
+      for (const r of runs) {
+        if (r.status === "SUCCESS") {
+          successfulRuns++;
+        } else if (r.status === "FAILED") {
+          failedRuns++;
+        } else if (r.status === "CANCELLED") {
+          cancelledRuns++;
+        }
+
         if (r.startedAt && r.finishedAt) {
           const dur =
             new Date(r.finishedAt).getTime() - new Date(r.startedAt).getTime();

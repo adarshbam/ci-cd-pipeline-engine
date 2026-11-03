@@ -24,6 +24,7 @@ export default class RunPipeline implements PipelineRun {
   repository?: string;
   deliveryId?: string;
   commitStatus?: CommitStatusInfo;
+  failureReason?: string;
 
   constructor(workflow: Workflow, branch?: string, environment?: Environment) {
     this.id = randomUUID();
@@ -69,9 +70,12 @@ export default class RunPipeline implements PipelineRun {
     }
   }
 
-  fail() {
+  fail(reason?: string) {
     if (this.status === "CANCELLED") {
       return;
+    }
+    if (reason) {
+      this.failureReason = reason;
     }
     if (this.status === "RUNNING") {
       this.status = "FAILED";
@@ -116,6 +120,7 @@ export default class RunPipeline implements PipelineRun {
     run.repository = stored.repository;
     run.deliveryId = stored.deliveryId;
     run.commitStatus = stored.commitStatus;
+    run.failureReason = stored.failureReason;
     return run;
   }
 }

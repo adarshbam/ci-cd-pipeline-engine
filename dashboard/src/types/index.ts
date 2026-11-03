@@ -82,6 +82,7 @@ export interface PipelineRun {
   isIdlePreview?: boolean;
   repository?: string;
   deliveryId?: string;
+  failureReason?: string;
   commitStatus?: {
     state: 'pending' | 'success' | 'failure' | 'unavailable';
     context: string;

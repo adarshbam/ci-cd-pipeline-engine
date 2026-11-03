@@ -1,0 +1,41 @@
+{
+  "$schema": "./schema/workflow.schema.json",
+  "name": "thirty-second-pipeline",
+  "version": "1.0",
+  "webhook": {
+    "url": "/webhooks/thirty-second-pipeline",
+    "methods": ["POST", "GET"]
+  },
+  "trigger": {
+    "events": ["push"],
+    "allowedBranches": ["main", "development"]
+  },
+  "jobs": {
+    "build": {
+      "steps": [
+        {
+          "name": "Compile Application",
+          "run": "node -e \"console.log('Initializing build environment...'); let elapsed = 0; const timer = setInterval(() => { elapsed += 2; console.log('Compiling modules... [' + elapsed + 's/6s]'); if (elapsed >= 6) { clearInterval(timer); console.log('Build artifact generated successfully: dist/app.bundle.js'); process.exit(0); } }, 2000);\""
+        }
+      ]
+    },
+    "test": {
+      "needs": ["build"],
+      "steps": [
+        {
+          "name": "Execute Test Suite",
+          "run": "node -e \"console.log('Running automated test suites...'); let elapsed = 0; const timer = setInterval(() => { elapsed += 2; console.log('Running test batch ' + (elapsed/2) + '... [' + elapsed + 's/14s]'); if (elapsed >= 14) { clearInterval(timer); console.log('All 54 test suites passed successfully (100% coverage)'); process.exit(0); } }, 2000);\""
+        }
+      ]
+    },
+    "deploy": {
+      "needs": ["test"],
+      "steps": [
+        {
+          "name": "Deploy and Health Check",
+          "run": "node -e \"console.log('Deploying application package to staging...'); let elapsed = 0; const timer = setInterval(() => { elapsed += 2; console.log('Verifying container health and routes... [' + elapsed + 's/10s]'); if (elapsed >= 10) { clearInterval(timer); console.log('Deployment live and verified healthy!'); process.exit(0); } }, 2000);\""
+        }
+      ]
+    }
+  }
+}

@@ -100,23 +100,26 @@ export const WorkflowDetailPage: React.FC = () => {
     loadData();
   }, [id, dataMode, searchParams]);
 
-  // Polling for active running state
+  // Polling for active running or queued state
   useEffect(() => {
-    if (!run || run.status !== 'running') return;
+    if (!run || (run.status !== 'running' && run.status !== 'queued')) return;
 
     const interval = setInterval(async () => {
       try {
-        const updated = await pipelineApi.getRunById(run.id);
+        const updated = await pipelineApi.getRunById(run.id, dataMode);
         if (updated) {
           setRun(updated);
+          if (updated.status !== 'running' && updated.status !== 'queued') {
+            pipelineApi.getMetrics(dataMode).then((m) => m && setMetrics(m));
+          }
         }
       } catch {
         // Keep existing state
       }
-    }, 2000);
+    }, 1000);
 
     return () => clearInterval(interval);
-  }, [run?.id, run?.status]);
+  }, [run?.id, run?.status, dataMode]);
 
   const handleSelectJob = (job: Job) => {
     setSelectedJob(job);
@@ -194,9 +197,37 @@ export const WorkflowDetailPage: React.FC = () => {
     }
   };
 
+  if (!loading && !run) {
+    return (
+      <Card className="p-8 text-center max-w-xl mx-auto my-12 border-[#27272A] bg-[#12141A]">
+        <AlertTriangle className="w-12 h-12 text-[#F59E0B] mx-auto mb-4" />
+        <h2 className="text-lg font-semibold text-[#F4F4F5] mb-2">Pipeline Run Not Found</h2>
+        <p className="text-sm text-[#A1A1AA] mb-6">
+          Unable to locate pipeline run <code className="text-[#38BDF8]">{id}</code>. It may have been cleaned up or is still initializing.
+        </p>
+        <div className="flex justify-center gap-3">
+          <Button variant="secondary" onClick={() => navigate('/dashboard')}>
+            Return to Dashboard
+          </Button>
+          <Button variant="primary" onClick={() => window.location.reload()}>
+            Retry
+          </Button>
+        </div>
+      </Card>
+    );
+  }
+
   if (loading || !run || !metrics) {
     return (
       <div className="space-y-6">
+        <div className="p-3.5 rounded-xl border border-[#27272A] bg-[#12141A] flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <RotateCw className="w-4 h-4 text-[#38BDF8] animate-spin" />
+            <span className="text-xs text-[#A1A1AA]">
+              Loading pipeline execution <span className="text-[#F4F4F5] font-mono">{id}</span>...
+            </span>
+          </div>
+        </div>
         <Skeleton className="h-24 w-full rounded-xl" />
         <Skeleton className="h-[380px] w-full rounded-xl" />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
@@ -221,6 +252,21 @@ export const WorkflowDetailPage: React.FC = () => {
         isActionLoading={isActionLoading}
         artifactCount={artifacts.length}
       />
+
+      {/* Run Failure Diagnostic Alert Banner */}
+      {run.status === 'failed' && (
+        <div className="p-4 rounded-lg bg-[#241215] border border-[#4C1D24] space-y-1.5">
+          <div className="flex items-center gap-2 text-[#F87171] font-semibold text-xs">
+            <AlertTriangle className="w-4 h-4 shrink-0 text-[#F87171]" />
+            <span>Pipeline Execution Failed</span>
+          </div>
+          <p className="text-xs text-[#F87171] font-mono bg-[#1E0F12] p-2.5 rounded border border-[#3E151B] break-words">
+            {run.failureReason ||
+              run.jobs?.find((j) => j.status === 'failed' && j.failureReason)?.failureReason ||
+              'One or more jobs in the pipeline graph failed or encountered an execution error'}
+          </p>
+        </div>
+      )}
 
       {/* Action Notification Banner */}
       {actionNotice && (
