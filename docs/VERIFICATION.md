@@ -1,5 +1,15 @@
 # Verification record
 
+## Source review — 6 November 2026
+
+Documentation was reconciled against source at `ccf1985f006e6341a00cd29cb5ed0db57de22bb0`. Current package scripts include `npm test`, cancellation, management routes, and disk-backed history/restart reconciliation. Earlier notes describing their absence apply to their older baseline only.
+
+This documentation pass does not rerun application suites, a real webhook, a deployment, or a load/security test. Use [Setup](SETUP.md) and [Release checks](RELEASE.md) to record new results with exact revisions. The dashboard screenshot is a prior local-session capture, not a replacement for a test record.
+
+## Historical results
+
+The following dated record is preserved as evidence for its original revision, with navigation links retargeted; it does not verify newer code:
+
 Verified on **22 October 2026 (Asia/Calcutta)** against `main` at base commit **`3b11ca0b185c82744f3c5298608185db77a89c52`**, followed by the documentation and standalone demo in this change. This record reports observed checks, not a claim that every historical exercise or test file passed.
 
 ## Environment and scope
@@ -75,4 +85,4 @@ is claimed.
 | Real application build/deployment or production isolation/restart recovery | Not implemented by the sample capstone; it uses text artifacts and sample commands. Temporary directories are not containers, and in-memory tracking does not recover after restart. |
 | Earlier chat's numbered exercises 7.4.5–7.4.8 | The retrieved chat contained reference markers and omitted screenshot contents. No reliable mapping from those exercise numbers to current test files was available. Concrete file/command results above are the evidence used here. |
 
-See [README boundaries](../README.md#boundaries-and-next-steps) and [architecture semantics](ARCHITECTURE.md#state-failure-and-reporting-semantics) before making production-readiness claims.
+See [README boundaries](../README.md#scope-and-limits) and [architecture semantics](ARCHITECTURE.md#scheduling-two-slots-and-a-ready-wave-barrier) before making production-readiness claims.
